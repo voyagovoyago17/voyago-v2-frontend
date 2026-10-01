@@ -8,13 +8,14 @@ class Endpoints {
   static const String _envBackendUrl = String.fromEnvironment('BACKEND_URL');
 
   // Hôtes Backend (Port NestJS : 3333)
-  // static const String localNetworkBackendUrl = 'http://192.168.1.81:3333';
-  static const String localNetworkBackendUrl = 'http://10.75.1.6:3333'; // Autre réseau
+  static const String localNetworkBackendUrl = 'http://192.168.1.81:3333';
+  // static const String localNetworkBackendUrl = 'http://10.75.1.6:3333'; // Autre réseau
   static const String androidEmulatorBackendUrl = 'http://10.0.2.2:3333';
-  static const String localhostBackendUrl = 'http://localhost:3333';
+  static const String localhostBackendUrl = 'http://127.0.0.1:3333';
 
-  // Utiliser l'IP LAN directe (testé et validé à 100% depuis le smartphone)
-  static const bool useLanIpForDevice = true;
+  // false = Tunnel USB adb reverse (recommandé en développement avec câble, insensible au pare-feu/Wi-Fi)
+  // true = IP locale Wi-Fi (nécessite d'autoriser le port 3333 dans le pare-feu Windows)
+  static const bool useLanIpForDevice = false;
 
   static String get baseUrl {
     if (_envBackendUrl.isNotEmpty) {
@@ -24,9 +25,10 @@ class Endpoints {
       return localhostBackendUrl;
     }
     if (Platform.isAndroid) {
-      // 192.168.1.81:3333 est directement accessible par le téléphone (en Wi-Fi ou USB)
-      // sans dépendre d'une règle adb reverse qui s'efface aux reconnexions
-      return localNetworkBackendUrl;
+      if (useLanIpForDevice) {
+        return localNetworkBackendUrl;
+      }
+      return localhostBackendUrl;
     }
     return localhostBackendUrl;
   }
