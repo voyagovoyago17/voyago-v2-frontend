@@ -1,0 +1,15 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "adb-reverse",
+      "type": "shell",
+      "command": "powershell -Command \"if (Test-Path $env:LOCALAPPDATA\\Android\\Sdk\\platform-tools\\adb.exe) { & $env:LOCALAPPDATA\\Android\\Sdk\\platform-tools\\adb.exe reverse tcp:3333 tcp:3333 } else { adb reverse tcp:3333 tcp:3333 }\"",
+      "problemMatcher": [],
+      "presentation": {
+        "reveal": "silent",
+        "panel": "shared"
+      }
+    }
+  ]
+}

@@ -1,0 +1,30 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Voyagooo (Local USB Backend)",
+      "request": "launch",
+      "type": "dart",
+      "preLaunchTask": "adb-reverse",
+      "args": [
+        "--dart-define=APP_ENV=local"
+      ]
+    },
+    {
+      "name": "Voyagooo (Production API)",
+      "request": "launch",
+      "type": "dart",
+      "args": [
+        "--dart-define=APP_ENV=prod"
+      ]
+    },
+    {
+      "name": "Voyagooo (Wi-Fi LAN 192.168.1.81)",
+      "request": "launch",
+      "type": "dart",
+      "args": [
+        "--dart-define=BACKEND_URL=http://192.168.1.81:3333"
+      ]
+    }
+  ]
+}
