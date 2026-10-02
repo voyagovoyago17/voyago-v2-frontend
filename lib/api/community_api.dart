@@ -256,19 +256,22 @@ class CommunityApi {
     return [];
   }
 
-  /// Lance un voyage de tribu (l'IA prépare les lieux : peut prendre jusqu'à une minute)
+  /// Lance un voyage de tribu. mode 'fresh' : nouvel itinéraire IA (jusqu'à une minute) ;
+  /// 'reuse' : parcours déjà connu pour la destination, instantané.
   Future<TribeTripPlan> createTripPlan(
     String circleId, {
     required String destination,
     required int durationDays,
     String? pace,
     String? startDate,
+    String mode = 'fresh',
   }) async {
     final data = await _client.post(
       Endpoints.circleTripPlans(circleId),
       data: {
         'destination': destination.trim(),
         'duration_days': durationDays,
+        'mode': mode,
         if (pace != null) 'pace': pace,
         if (startDate != null) 'start_date': startDate,
       },

@@ -110,7 +110,7 @@ Future<void> remixTrip(BuildContext context, WidgetRef ref, Trip trip) async {
     messenger.showSnackBar(
       SnackBar(
         backgroundColor: isQuota ? VoyagoColors.orange : VoyagoColors.coral,
-        content: Text(isQuota ? 'Tu as atteint tes 3 voyages gratuits du mois.' : e.message),
+        content: Text(e.message),
         action: isQuota && context.mounted
             ? SnackBarAction(label: 'Passer Pro', onPressed: () => context.go('/pricing'))
             : null,

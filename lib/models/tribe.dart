@@ -46,6 +46,9 @@ class TribeTripPlan {
   final int joinedCount;
   final bool joinedByMe;
   final bool canFinalize;
+
+  /// false quand un parcours déjà connu a été réutilisé (sans appel IA)
+  final bool aiGenerated;
   final Map<String, dynamic>? creator;
   final DateTime createdAt;
 
@@ -66,6 +69,7 @@ class TribeTripPlan {
     this.joinedCount = 0,
     this.joinedByMe = false,
     this.canFinalize = false,
+    this.aiGenerated = true,
     this.creator,
     required this.createdAt,
   });
@@ -102,6 +106,7 @@ class TribeTripPlan {
       joinedCount: (json['joined_count'] as num?)?.toInt() ?? 0,
       joinedByMe: json['joined_by_me'] as bool? ?? false,
       canFinalize: json['can_finalize'] as bool? ?? false,
+      aiGenerated: json['ai_generated'] as bool? ?? true,
       creator: json['creator'] as Map<String, dynamic>?,
       createdAt: DateTime.tryParse(json['created_at']?.toString() ?? '')?.toLocal() ?? DateTime.now(),
     );

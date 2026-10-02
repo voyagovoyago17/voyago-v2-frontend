@@ -329,6 +329,7 @@ class _CreateTripPlanSheetState extends ConsumerState<_CreateTripPlanSheet> {
   late final TextEditingController _destinationController;
   int _days = 3;
   String _pace = 'equilibre';
+  String _mode = 'fresh';
   DateTime? _startDate;
   bool _creating = false;
 
@@ -374,9 +375,21 @@ class _CreateTripPlanSheetState extends ConsumerState<_CreateTripPlanSheet> {
             durationDays: _days,
             pace: _pace,
             startDate: _startDate != null ? apiDate(_startDate!) : null,
+            mode: _mode,
           );
       ref.invalidate(circleTripPlansProvider(widget.circle.id));
       if (!mounted) return;
+      if (_mode == 'reuse') {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              plan.aiGenerated
+                  ? 'Aucun parcours connu pour ${plan.destination} : un nouvel itinéraire a été créé.'
+                  : '🔁 Parcours déjà connu pour ${plan.destination} : prêt instantanément !',
+            ),
+          ),
+        );
+      }
       Navigator.of(context).pop();
       context.push('/circle/${widget.circle.id}/plan/${plan.id}');
     } on ApiException catch (e) {
@@ -431,6 +444,30 @@ class _CreateTripPlanSheetState extends ConsumerState<_CreateTripPlanSheet> {
             ],
           ),
           const SizedBox(height: 12),
+          const Text('Lieux proposés', style: TextStyle(color: VoyagoColors.text, fontWeight: FontWeight.bold)),
+          const SizedBox(height: 6),
+          Row(
+            children: [
+              Expanded(
+                child: _ModeOption(
+                  selected: _mode == 'fresh',
+                  title: '✨ Nouvel itinéraire',
+                  subtitle: "Des lieux inédits par l'IA (4 par mois)",
+                  onTap: _creating ? null : () => setState(() => _mode = 'fresh'),
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: _ModeOption(
+                  selected: _mode == 'reuse',
+                  title: '🔁 Parcours déjà connu',
+                  subtitle: 'Lieux déjà proposés à une tribu, instantané',
+                  onTap: _creating ? null : () => setState(() => _mode = 'reuse'),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
           const Text('Rythme', style: TextStyle(color: VoyagoColors.text, fontWeight: FontWeight.bold)),
           const SizedBox(height: 6),
           Wrap(
@@ -474,7 +511,7 @@ class _CreateTripPlanSheetState extends ConsumerState<_CreateTripPlanSheet> {
                           child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
                         ),
                         SizedBox(width: 12),
-                        Text("L'IA prépare les lieux…", style: TextStyle(color: Colors.white)),
+                        Text('Préparation des lieux…', style: TextStyle(color: Colors.white)),
                       ],
                     )
                   : const Text(
@@ -484,6 +521,42 @@ class _CreateTripPlanSheetState extends ConsumerState<_CreateTripPlanSheet> {
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+class _ModeOption extends StatelessWidget {
+  final bool selected;
+  final String title;
+  final String subtitle;
+  final VoidCallback? onTap;
+
+  const _ModeOption({required this.selected, required this.title, required this.subtitle, this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(14),
+      child: Container(
+        padding: const EdgeInsets.all(10),
+        decoration: BoxDecoration(
+          color: selected ? VoyagoColors.primary.withValues(alpha: 0.12) : VoyagoColors.background,
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(
+            color: selected ? VoyagoColors.primary : VoyagoColors.cardBorder,
+            width: selected ? 2 : 1,
+          ),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(title, style: const TextStyle(color: VoyagoColors.text, fontWeight: FontWeight.bold, fontSize: 13)),
+            const SizedBox(height: 2),
+            Text(subtitle, style: const TextStyle(color: VoyagoColors.muted, fontSize: 11)),
+          ],
+        ),
       ),
     );
   }

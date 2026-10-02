@@ -123,7 +123,7 @@ class _TribePlanScreenState extends ConsumerState<TribePlanScreen> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           backgroundColor: isQuota ? VoyagoColors.orange : VoyagoColors.coral,
-          content: Text(isQuota ? 'Tu as atteint tes 3 voyages gratuits du mois.' : e.message),
+          content: Text(e.message),
           action: isQuota ? SnackBarAction(label: 'Passer Pro', onPressed: () => context.go('/pricing')) : null,
         ),
       );
