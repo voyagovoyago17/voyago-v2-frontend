@@ -1372,6 +1372,13 @@ class _ProfileContentState extends ConsumerState<_ProfileContent> {
         'description': 'Un voyageur a refait un de ses voyages.',
       },
       {
+        'id': 'chasseur_pepites',
+        'title': 'Chasseur de Pépites',
+        'tier': 'Tier 1',
+        'emoji': '💎',
+        'description': 'A ramassé sa première pépite sur le terrain.',
+      },
+      {
         'id': 'esprit_tribu',
         'title': 'Esprit de Tribu',
         'tier': 'Tier 2',

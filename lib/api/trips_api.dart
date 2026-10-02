@@ -1,4 +1,5 @@
 import '../models/trip.dart';
+import '../models/trip_gem.dart';
 import 'dio_client.dart';
 import 'endpoints.dart';
 
@@ -71,6 +72,24 @@ class TripsApi {
       },
     );
     return Trip.fromJson(data as Map<String, dynamic>);
+  }
+
+  /// Radar : pépites de mon voyage et fenêtre d'activité
+  Future<TripGems> getGems(String tripId) async {
+    final data = await _client.get(Endpoints.tripGems(tripId));
+    return TripGems.fromJson(data as Map<String, dynamic>);
+  }
+
+  /// Voyage sans dates : démarre le radar pour la durée du voyage
+  Future<TripGems> startGems(String tripId) async {
+    final data = await _client.post(Endpoints.tripGemsStart(tripId));
+    return TripGems.fromJson(data as Map<String, dynamic>);
+  }
+
+  /// Ramasse une pépite sur place ; renvoie l'XP gagnée (0 si déjà ramassée)
+  Future<int> collectGem(String tripId, String gemId, {required double lat, required double lng}) async {
+    final data = await _client.post(Endpoints.tripGemCollect(tripId, gemId), data: {'lat': lat, 'lng': lng});
+    return ((data as Map<String, dynamic>)['xp_awarded'] as num?)?.toInt() ?? 0;
   }
 
   /// Récupération du détail d'un voyage

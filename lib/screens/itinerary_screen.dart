@@ -24,6 +24,11 @@ import '../services/cached_tile_provider.dart';
 import '../theme.dart';
 import '../widgets/weather_overlay.dart';
 import '../widgets/poi_spotlight_card.dart';
+import '../models/trip_gem.dart';
+import '../api/api_exceptions.dart';
+import '../providers/profile_provider.dart';
+import '../widgets/radar/radar_sheet.dart';
+import '../widgets/radar/radar_visuals.dart';
 import '../widgets/itinerary_bottom_sheet.dart';
 import '../widgets/map_poi_pin.dart';
 import '../widgets/traveler_drawer.dart';
@@ -71,6 +76,14 @@ class _ItineraryScreenState extends ConsumerState<ItineraryScreen>
   Map<int, RouteResult>? _transitRoutes;      // POI[i] -> POI[i+1]
   RouteResult? _navigationRoute;              // route from user to selected/next POI
   int? _navigationTargetIndex;                // which POI we're navigating to
+
+  // === RADAR À PÉPITES (actif pendant le voyage) ===
+  final ValueNotifier<LatLng?> _radarPosition = ValueNotifier(null);
+  final Set<String> _dismissedGemAlerts = {};
+  String? _collectingGemId;
+
+  /// Rayon d'alerte : une pépite à moins de 400 m déclenche la bannière de détour
+  static const double _gemAlertRadiusM = 400;
   Timer? _routeRecalcDebounce;
   LatLng? _lastRouteCalcPosition;             // avoid re-calc on micro-moves
   String? _transitRoutesKey;                  // "<tripId>|<day>" des trajets inter-POIs calculés
@@ -198,6 +211,7 @@ class _ItineraryScreenState extends ConsumerState<ItineraryScreen>
       setState(() {
         _liveUserPosition = userCoords;
       });
+      _radarPosition.value = userCoords;
 
       // Si l'utilisateur clique sur le bouton de position, ou si aucun voyage n'a encore fixé le centre
       if (centerOnUser || (_currentTrip == null && _currentCenter == null)) {
@@ -238,6 +252,7 @@ class _ItineraryScreenState extends ConsumerState<ItineraryScreen>
         setState(() {
           _liveUserPosition = newPos;
         });
+        _radarPosition.value = newPos;
         // Recalculer les distances si l'utilisateur a bougé de plus de 100m
         _onUserPositionChangedForRoutes(newPos);
         // Arrivée sur un lieu de l'itinéraire → demande d'avis
@@ -632,6 +647,7 @@ class _ItineraryScreenState extends ConsumerState<ItineraryScreen>
 
   @override
   void dispose() {
+    _radarPosition.dispose();
     _mapMoveDebounce?.cancel();
     _ambianceRefreshTimer?.cancel();
     _routeRecalcDebounce?.cancel();
@@ -836,8 +852,74 @@ class _ItineraryScreenState extends ConsumerState<ItineraryScreen>
     );
   }
 
+  // =========================================================================
+  // RADAR À PÉPITES
+  // =========================================================================
+
+  /// Pépite non ramassée la plus proche de ma position (radar actif uniquement).
+  ({TripGem gem, double distance})? _nearestGem(TripGems? data) {
+    final pos = _liveUserPosition;
+    if (data == null || !data.active || pos == null) return null;
+    ({TripGem gem, double distance})? best;
+    for (final g in data.remaining) {
+      final d = g.distanceFrom(pos.latitude, pos.longitude);
+      if (best == null || d < best.distance) best = (gem: g, distance: d);
+    }
+    return best;
+  }
+
+  /// Distance de ramassage côté app (le serveur tolère un peu plus pour la dérive GPS)
+  bool _gemInRange(TripGems data, double distance) => distance <= data.collectRadiusM * 0.75;
+
+  void _openRadar(Trip trip) {
+    showRadarSheet(
+      context,
+      tripId: trip.id,
+      position: _radarPosition,
+      onDetour: _detourToGem,
+      onCollect: (gem) => _collectGem(trip, gem),
+    );
+  }
+
+  /// Détour vers une pépite : tracé de guidage depuis ma position, sans changer l'itinéraire.
+  void _detourToGem(TripGem gem) {
+    final poi = gem.toPoi();
+    setState(() => _navigationTargetIndex = null);
+    _computeNavigationRoute(poi);
+    _animatedMapController.animateTo(dest: LatLng(gem.lat, gem.lng), zoom: 16);
+  }
+
+  Future<void> _collectGem(Trip trip, TripGem gem) async {
+    final pos = _liveUserPosition;
+    if (pos == null || _collectingGemId != null) return;
+    setState(() => _collectingGemId = gem.id);
+    try {
+      final xp = await ref.read(tripsApiProvider).collectGem(trip.id, gem.id, lat: pos.latitude, lng: pos.longitude);
+      HapticFeedback.mediumImpact();
+      ref.invalidate(tripGemsProvider(trip.id));
+      final userId = ref.read(currentUserProvider)?.userId;
+      if (userId != null) ref.invalidate(profileProvider(userId));
+      if (mounted) await showGemCollected(context, gem, xp);
+    } catch (e) {
+      _showSafeSnackBar(SnackBar(
+        content: Text(e is ApiException ? e.message : 'Impossible de ramasser la pépite'),
+        behavior: SnackBarBehavior.floating,
+      ));
+    } finally {
+      if (mounted) setState(() => _collectingGemId = null);
+    }
+  }
+
   Widget _buildScreen(Trip trip) {
     final dayPois = trip.poisForDay(_selectedDay);
+    // Radar : pépites du voyage, seulement pour le voyage de l'utilisateur connecté
+    final gemsData = trip.id.startsWith('demo') || trip.userId != ref.watch(currentUserProvider)?.userId
+        ? null
+        : ref.watch(tripGemsProvider(trip.id)).valueOrNull;
+    final nearestGem = _nearestGem(gemsData);
+    final showGemAlert = nearestGem != null &&
+        nearestGem.distance <= _gemAlertRadiusM &&
+        !_dismissedGemAlerts.contains(nearestGem.gem.id);
 
     // Trajets inter-étapes du jour affiché : (re)calculés à chaque changement de voyage ou de jour
     if (_transitRoutesKey != '${trip.id}|$_selectedDay') {
@@ -1006,6 +1088,27 @@ class _ItineraryScreenState extends ConsumerState<ItineraryScreen>
                     );
                   }).toList(),
                 ),
+
+                // === RADAR : ondes autour de moi et pépites à ramasser (pendant le voyage) ===
+                if (gemsData != null && gemsData.active)
+                  MarkerLayer(
+                    markers: [
+                      if (_liveUserPosition != null)
+                        Marker(point: _liveUserPosition!, width: 220, height: 220, child: const RadarPulse()),
+                      for (final g in gemsData.remaining)
+                        Marker(
+                          point: LatLng(g.lat, g.lng),
+                          width: 34,
+                          height: 34,
+                          child: GemMapMarker(
+                            gem: g,
+                            inRange: _liveUserPosition != null &&
+                                _gemInRange(gemsData, g.distanceFrom(_liveUserPosition!.latitude, _liveUserPosition!.longitude)),
+                            onTap: () => _openRadar(trip),
+                          ),
+                        ),
+                    ],
+                  ),
 
                 // === POSITION GPS EN TEMPS RÉEL DE L'UTILISATEUR ===
                 CurrentLocationLayer(
@@ -1301,6 +1404,32 @@ class _ItineraryScreenState extends ConsumerState<ItineraryScreen>
             bottom: MediaQuery.of(context).size.height * 0.46 + 12,
             child: Column(
               children: [
+                // Radar à pépites (visible dès que le voyage en contient)
+                if (gemsData != null && gemsData.gems.isNotEmpty) ...[
+                  Stack(
+                    clipBehavior: Clip.none,
+                    children: [
+                      _MapButton(icon: Icons.radar_rounded, onTap: () => _openRadar(trip)),
+                      if (gemsData.remaining.isNotEmpty)
+                        Positioned(
+                          top: -4,
+                          right: -4,
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
+                            decoration: BoxDecoration(
+                              color: gemsData.active ? radarColor : VoyagoColors.muted,
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            child: Text(
+                              '${gemsData.remaining.length}',
+                              style: const TextStyle(color: Color(0xFF10221F), fontSize: 10, fontWeight: FontWeight.bold),
+                            ),
+                          ),
+                        ),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                ],
                 // Bascule Style Carte : Plein Jour forcé ou Ambiance Réelle Dynamique (comme hellobarber)
                 _MapButton(
                   icon: _forceDayMap ? Icons.wb_sunny_rounded : ambiance.phaseIcon,
@@ -1401,6 +1530,36 @@ class _ItineraryScreenState extends ConsumerState<ItineraryScreen>
                   ),
                 ),
               ],
+            ),
+          ),
+
+          // === 4 bis. ALERTE RADAR : pépite à proximité (détour) ou à portée (ramasser) ===
+          Positioned(
+            left: 12,
+            right: 68,
+            bottom: MediaQuery.of(context).size.height * 0.46 + 12,
+            child: AnimatedSwitcher(
+              duration: const Duration(milliseconds: 350),
+              transitionBuilder: (child, a) => FadeTransition(
+                opacity: a,
+                child: SlideTransition(
+                  position: Tween(begin: const Offset(0, 0.4), end: Offset.zero)
+                      .animate(CurvedAnimation(parent: a, curve: Curves.easeOutBack)),
+                  child: child,
+                ),
+              ),
+              child: showGemAlert
+                  ? GemAlertBanner(
+                      key: ValueKey('gem-alert-${nearestGem.gem.id}-${_gemInRange(gemsData!, nearestGem.distance)}'),
+                      gem: nearestGem.gem,
+                      distanceM: nearestGem.distance,
+                      inRange: _gemInRange(gemsData, nearestGem.distance),
+                      collecting: _collectingGemId == nearestGem.gem.id,
+                      onTap: () => _detourToGem(nearestGem.gem),
+                      onCollect: () => _collectGem(trip, nearestGem.gem),
+                      onDismiss: () => setState(() => _dismissedGemAlerts.add(nearestGem.gem.id)),
+                    )
+                  : const SizedBox.shrink(key: ValueKey('gem-alert-none')),
             ),
           ),
 

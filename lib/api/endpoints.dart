@@ -29,6 +29,9 @@ class Endpoints {
   static String tripDetail(String tripId) => '/api/trip/$tripId';
   static String tripVisibility(String tripId) => '/api/trip/$tripId/visibility';
   static String tripRemix(String tripId) => '/api/trip/$tripId/remix';
+  static String tripGems(String tripId) => '/api/trip/$tripId/gems';
+  static String tripGemsStart(String tripId) => '/api/trip/$tripId/gems/start';
+  static String tripGemCollect(String tripId, String gemId) => '/api/trip/$tripId/gems/$gemId/collect';
 
   // --- COMMUNITY MODULE ---
   static const String publicFeed = '/api/community/feed';

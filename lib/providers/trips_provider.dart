@@ -1,6 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../api/api.dart';
 import '../models/trip.dart';
+import '../models/trip_gem.dart';
 
 final tripsApiProvider = Provider<TripsApi>((ref) => TripsApi());
 
@@ -16,6 +17,12 @@ final tripDetailProvider = FutureProvider.family<Trip, String>((ref, tripId) asy
   if (tripId.isEmpty) throw ApiException(message: 'Identifiant de voyage requis');
   final api = ref.watch(tripsApiProvider);
   return api.getTripById(tripId);
+});
+
+/// Radar des pépites d'un voyage (auteur connecté uniquement)
+final tripGemsProvider = FutureProvider.family<TripGems, String>((ref, tripId) async {
+  if (tripId.isEmpty || tripId.startsWith('demo')) return const TripGems();
+  return ref.watch(tripsApiProvider).getGems(tripId);
 });
 
 /// État du générateur d'itinéraires IA
