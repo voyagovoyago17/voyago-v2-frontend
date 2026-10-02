@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import '../../api/api_exceptions.dart';
 import '../../models/community_circle.dart';
 import '../../models/tribe.dart';
+import '../../providers/auth_provider.dart';
 import '../../providers/community_provider.dart';
 import '../../theme.dart';
 
@@ -158,12 +159,20 @@ class TribeTripsSection extends ConsumerWidget {
               ),
             ),
             if (circle.isMember)
-              TextButton.icon(
-                onPressed: () => showCreateTripPlanSheet(context, circle),
-                icon: const Icon(Icons.add, size: 16),
-                label: const Text('Planifier', style: TextStyle(fontWeight: FontWeight.bold)),
-                style: TextButton.styleFrom(foregroundColor: VoyagoColors.primary),
-              ),
+              // Réservé aux membres Pro : grisé (avec cadenas) pour les autres
+              ref.watch(currentUserProvider)?.isProActive ?? false
+                  ? TextButton.icon(
+                      onPressed: () => showCreateTripPlanSheet(context, circle),
+                      icon: const Icon(Icons.add, size: 16),
+                      label: const Text('Planifier', style: TextStyle(fontWeight: FontWeight.bold)),
+                      style: TextButton.styleFrom(foregroundColor: VoyagoColors.primary),
+                    )
+                  : TextButton.icon(
+                      onPressed: () => _showProRequired(context),
+                      icon: const Icon(Icons.lock_outline, size: 16),
+                      label: const Text('Planifier · Pro', style: TextStyle(fontWeight: FontWeight.bold)),
+                      style: TextButton.styleFrom(foregroundColor: VoyagoColors.muted),
+                    ),
           ],
         ),
         const SizedBox(height: 4),
@@ -177,7 +186,7 @@ class TribeTripsSection extends ConsumerWidget {
             if (plans.isEmpty) {
               return Text(
                 circle.isMember
-                    ? "Planifiez un voyage ensemble : l'IA propose des lieux, la tribu vote, l'itinéraire se construit."
+                        ? "Planifiez un voyage ensemble : l'IA propose des lieux, la tribu vote, l'itinéraire se construit."
                     : 'Rejoins la tribu pour planifier des voyages ensemble.',
                 style: const TextStyle(color: VoyagoColors.muted, fontSize: 13),
               );
@@ -199,6 +208,30 @@ class TribeTripsSection extends ConsumerWidget {
       ],
     );
   }
+}
+
+Future<void> _showProRequired(BuildContext context) async {
+  final goPro = await showDialog<bool>(
+    context: context,
+    builder: (ctx) => AlertDialog(
+      backgroundColor: VoyagoColors.surface,
+      title: const Text('💎 Réservé aux membres Pro', style: TextStyle(color: VoyagoColors.text)),
+      content: const Text(
+        "Lancer un voyage de tribu (lieux proposés par l'IA et vote de la tribu) est réservé aux "
+        'membres Voyagooo Pro. Tu peux toujours voter et rejoindre les voyages lancés par ta tribu.',
+        style: TextStyle(color: VoyagoColors.muted),
+      ),
+      actions: [
+        TextButton(onPressed: () => Navigator.of(ctx).pop(false), child: const Text('Plus tard')),
+        ElevatedButton(
+          onPressed: () => Navigator.of(ctx).pop(true),
+          style: ElevatedButton.styleFrom(backgroundColor: VoyagoColors.primary),
+          child: const Text('Découvrir Pro', style: TextStyle(color: Colors.white)),
+        ),
+      ],
+    ),
+  );
+  if (goPro == true && context.mounted) context.go('/pricing');
 }
 
 class _PlanCard extends StatelessWidget {

@@ -55,6 +55,15 @@ class AuthUser {
   final String? proTier;
   final DateTime? proExpiresAt;
 
+  /// Abonnement Pro réellement valide (même règle que le serveur : 3 jours de grâce
+  /// après l'échéance, pas d'échéance = à vie). `isPro` seul ignore l'échéance.
+  bool get isProActive {
+    if (!isPro) return false;
+    final expiresAt = proExpiresAt;
+    if (expiresAt == null) return true;
+    return expiresAt.add(const Duration(days: 3)).isAfter(DateTime.now());
+  }
+
   const AuthUser({
     required this.userId,
     required this.authProvider,
