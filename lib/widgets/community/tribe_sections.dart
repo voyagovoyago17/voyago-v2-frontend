@@ -2,12 +2,14 @@ import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import '../../api/api_exceptions.dart';
 import '../../models/community_circle.dart';
 import '../../models/tribe.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/community_provider.dart';
+import '../../data/countries_data.dart';
 import '../../theme.dart';
+import '../location_pickers.dart';
+import 'tribe_launch_globe.dart';
 
 /// Date au format attendu par l'API (AAAA-MM-JJ).
 String apiDate(DateTime d) =>
@@ -326,28 +328,33 @@ class _CreateTripPlanSheet extends ConsumerStatefulWidget {
 }
 
 class _CreateTripPlanSheetState extends ConsumerState<_CreateTripPlanSheet> {
-  late final TextEditingController _destinationController;
+  // Pays puis ville (la liste des villes dépend du pays), pré-remplis avec la destination du cercle
+  late String _country = widget.circle.destinationCountry ?? '';
+  late String _city = widget.circle.destinationCity ?? '';
   int _days = 3;
   String _pace = 'equilibre';
   String _mode = 'fresh';
   DateTime? _startDate;
   bool _creating = false;
 
-  @override
-  void initState() {
-    super.initState();
-    final c = widget.circle;
-    _destinationController = TextEditingController(
-      text: c.destinationCity != null && c.destinationCountry != null
-          ? '${c.destinationCity}, ${c.destinationCountry}'
-          : '',
-    );
+  Future<void> _chooseCountry() async {
+    final picked = await pickCountry(context, currentCountry: _country);
+    if (picked == null || !mounted) return;
+    setState(() {
+      if (picked != _country) _city = '';
+      _country = picked;
+    });
+    // Enchaîne sur la ville du pays choisi
+    if (_city.isEmpty) await _chooseCity();
   }
 
-  @override
-  void dispose() {
-    _destinationController.dispose();
-    super.dispose();
+  Future<void> _chooseCity() async {
+    if (_country.isEmpty) {
+      await _chooseCountry();
+      return;
+    }
+    final picked = await pickCity(context, countryName: _country, currentCity: _city);
+    if (picked != null && mounted) setState(() => _city = picked);
   }
 
   Future<void> _pickDate() async {
@@ -362,44 +369,47 @@ class _CreateTripPlanSheetState extends ConsumerState<_CreateTripPlanSheet> {
   }
 
   Future<void> _create() async {
-    final destination = _destinationController.text.trim();
-    if (destination.length < 2) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Indique une destination')));
+    if (_country.isEmpty) {
+      await _chooseCountry();
       return;
     }
+    final destination = _city.isNotEmpty ? '$_city, $_country' : _country;
     setState(() => _creating = true);
-    try {
-      final plan = await ref.read(communityApiProvider).createTripPlan(
-            widget.circle.id,
-            destination: destination,
-            durationDays: _days,
-            pace: _pace,
-            startDate: _startDate != null ? apiDate(_startDate!) : null,
-            mode: _mode,
-          );
-      ref.invalidate(circleTripPlansProvider(widget.circle.id));
-      if (!mounted) return;
-      if (_mode == 'reuse') {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              plan.aiGenerated
-                  ? 'Aucun parcours connu pour ${plan.destination} : un nouvel itinéraire a été créé.'
-                  : '🔁 Parcours déjà connu pour ${plan.destination} : prêt instantanément !',
-            ),
-          ),
+
+    // Coordonnées de la ville : le globe la pointe pendant que les lieux se préparent
+    final coords = _city.isEmpty
+        ? null
+        : await CountriesData.findCityCoordinates(_country, _city)
+            .timeout(const Duration(seconds: 2), onTimeout: () => null);
+    if (!mounted) return;
+
+    final container = ProviderScope.containerOf(context, listen: false);
+    final planFuture = ref.read(communityApiProvider).createTripPlan(
+          widget.circle.id,
+          destination: destination,
+          city: _city.isNotEmpty ? _city : null,
+          country: _country,
+          countryCode: CountriesData.findCountrySync(_country)?.code,
+          durationDays: _days,
+          pace: _pace,
+          startDate: _startDate != null ? apiDate(_startDate!) : null,
+          mode: _mode,
         );
-      }
-      Navigator.of(context).pop();
-      context.push('/circle/${widget.circle.id}/plan/${plan.id}');
-    } on ApiException catch (e) {
-      if (mounted) {
-        setState(() => _creating = false);
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(backgroundColor: VoyagoColors.coral, content: Text(e.message)),
-        );
-      }
-    }
+    // Même si la modale est fermée avant la fin, la liste des voyages se met à jour
+    planFuture.then((_) => container.invalidate(circleTripPlansProvider(widget.circle.id))).ignore();
+
+    final plan = await showTribeLaunchGlobe(
+      context,
+      planFuture: planFuture,
+      placeLabel: _city.isNotEmpty ? _city : _country,
+      flag: CountriesData.getFlag(_country),
+      approxCoordinates: coords,
+    );
+    if (!mounted) return;
+    setState(() => _creating = false);
+    if (plan == null) return;
+    Navigator.of(context).pop();
+    context.push('/circle/${widget.circle.id}/plan/${plan.id}');
   }
 
   @override
@@ -420,14 +430,33 @@ class _CreateTripPlanSheetState extends ConsumerState<_CreateTripPlanSheet> {
             style: TextStyle(color: VoyagoColors.muted, fontSize: 13),
           ),
           const SizedBox(height: 16),
-          TextField(
-            controller: _destinationController,
-            enabled: !_creating,
-            style: const TextStyle(color: VoyagoColors.text),
-            decoration: const InputDecoration(
-              hintText: 'Destination (ex : Lisbonne, Portugal)',
-              prefixIcon: Icon(Icons.place_outlined, color: VoyagoColors.primary),
-            ),
+          Row(
+            children: [
+              Expanded(
+                child: LocationFieldCard(
+                  icon: Icons.public_rounded,
+                  iconColor: VoyagoColors.blue,
+                  label: _country.isNotEmpty ? _country : 'Pays',
+                  sublabel: _country.isNotEmpty ? 'Pays de destination' : 'Choisir le pays',
+                  flag: _country.isNotEmpty ? CountriesData.getFlag(_country) : null,
+                  isSelected: _country.isNotEmpty,
+                  onTap: _creating ? () {} : _chooseCountry,
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: LocationFieldCard(
+                  icon: Icons.location_city_rounded,
+                  iconColor: VoyagoColors.blue,
+                  label: _city.isNotEmpty ? _city : 'Ville',
+                  sublabel: _city.isNotEmpty
+                      ? _country
+                      : (_country.isNotEmpty ? 'Choisir la ville' : "Choisir le pays d'abord"),
+                  isSelected: _city.isNotEmpty,
+                  onTap: _creating ? () {} : _chooseCity,
+                ),
+              ),
+            ],
           ),
           const SizedBox(height: 16),
           const Text('Durée', style: TextStyle(color: VoyagoColors.text, fontWeight: FontWeight.bold)),
@@ -511,7 +540,7 @@ class _CreateTripPlanSheetState extends ConsumerState<_CreateTripPlanSheet> {
                           child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
                         ),
                         SizedBox(width: 12),
-                        Text('Préparation des lieux…', style: TextStyle(color: Colors.white)),
+                        Text('Lancement…', style: TextStyle(color: Colors.white)),
                       ],
                     )
                   : const Text(

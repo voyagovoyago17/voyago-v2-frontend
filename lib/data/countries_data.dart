@@ -201,6 +201,27 @@ class CountriesData {
     }
   }
 
+  static final Map<String, List<csc.City>> _cachedRawCitiesByCountryCode = {};
+
+  /// Coordonnées (latitude, longitude) d'une ville d'un pays, via `country_state_city`.
+  /// Renvoie null si la ville est inconnue ou sans coordonnées.
+  static Future<(double, double)?> findCityCoordinates(String? countryNameOrCode, String? cityName) async {
+    if (countryNameOrCode == null || cityName == null || cityName.trim().isEmpty) return null;
+    try {
+      await getCountries();
+      final isoCode = findCountrySync(countryNameOrCode)?.code ?? countryNameOrCode.trim().toUpperCase();
+      final cities = _cachedRawCitiesByCountryCode[isoCode] ??= await csc.getCountryCities(isoCode);
+      final target = cityName.trim().toLowerCase();
+      for (final c in cities) {
+        if (c.name.trim().toLowerCase() != target) continue;
+        final lat = double.tryParse(c.latitude ?? '');
+        final lng = double.tryParse(c.longitude ?? '');
+        if (lat != null && lng != null) return (lat, lng);
+      }
+    } catch (_) {}
+    return null;
+  }
+
   static const List<CountryInfo> _fallbackCountries = [
     CountryInfo(name: 'France', frenchName: 'France', code: 'FR', flag: '🇫🇷'),
     CountryInfo(name: 'Cote D\'Ivoire (Ivory Coast)', frenchName: 'Côte d\'Ivoire', code: 'CI', flag: '🇨🇮'),

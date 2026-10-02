@@ -265,6 +265,9 @@ class CommunityApi {
     String? pace,
     String? startDate,
     String mode = 'fresh',
+    String? city,
+    String? country,
+    String? countryCode,
   }) async {
     final data = await _client.post(
       Endpoints.circleTripPlans(circleId),
@@ -272,6 +275,9 @@ class CommunityApi {
         'destination': destination.trim(),
         'duration_days': durationDays,
         'mode': mode,
+        if (city != null) 'city': city,
+        if (country != null) 'country': country,
+        if (countryCode != null) 'country_code': countryCode,
         if (pace != null) 'pace': pace,
         if (startDate != null) 'start_date': startDate,
       },
