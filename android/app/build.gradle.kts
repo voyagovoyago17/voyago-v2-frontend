@@ -5,6 +5,12 @@ plugins {
     id("dev.flutter.flutter-gradle-plugin")
 }
 
+// Notifications push : actives dès que google-services.json (console Firebase) est déposé dans android/app/.
+// Sans ce fichier, l'app compile et fonctionne, simplement sans push.
+if (file("google-services.json").exists()) {
+    apply(plugin = "com.google.gms.google-services")
+}
+
 android {
     namespace = "com.voyagooo.voyagooo"
     compileSdk = flutter.compileSdkVersion

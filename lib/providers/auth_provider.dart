@@ -1,6 +1,7 @@
 import 'dart:io';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:uuid/uuid.dart';
+import '../services/push_notifications.dart';
 import '../api/api.dart';
 import '../core/storage/secure_storage_service.dart';
 import '../models/auth_user.dart';
@@ -368,6 +369,8 @@ class AuthNotifier extends StateNotifier<AuthState> {
 
   /// Déconnexion complète
   Future<void> logout() async {
+    // Avant d'invalider la session : cet appareil ne doit plus recevoir les push du compte
+    await PushNotifications.instance.unregisterDevice();
     try {
       await _authApi.logout();
     } catch (_) {}

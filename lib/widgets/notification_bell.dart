@@ -5,8 +5,7 @@ import '../models/app_notification.dart';
 import '../providers/auth_provider.dart';
 import '../providers/notifications_provider.dart';
 import '../theme.dart';
-import 'place_review_sheet.dart';
-import 'community/comments_sheet.dart';
+import 'notification_actions.dart';
 
 /// Cloche de notifications avec badge du nombre de non lues.
 class NotificationBell extends ConsumerWidget {
@@ -281,41 +280,9 @@ class _NotificationTile extends ConsumerWidget {
   void _onTap(BuildContext context, WidgetRef ref) {
     final n = notification;
     ref.read(notificationsProvider.notifier).markRead(n);
-    final navigator = Navigator.of(context);
-
-    if (n.isArrival && n.lat != null && n.lng != null && !n.isReviewed) {
-      navigator.pop();
-      if (!hostContext.mounted) return;
-      showPlaceReviewSheet(
-        hostContext,
-        ReviewTarget(
-          name: n.placeName ?? n.title,
-          lat: n.lat!,
-          lng: n.lng!,
-          imageUrl: n.data['image_url']?.toString(),
-          destination: n.data['destination']?.toString(),
-          tripId: n.tripId,
-        ),
-        fromArrival: true,
-      );
-    } else if ((n.type == 'trip_ready' || n.type == 'trip_remixed') && (n.tripId?.isNotEmpty ?? false)) {
-      navigator.pop();
-      if (hostContext.mounted) hostContext.go('/itinerary/${n.tripId}');
-    } else if (n.type == 'tribe_trip') {
-      final circleId = n.data['circle_id']?.toString();
-      final planId = n.data['plan_id']?.toString();
-      if (circleId == null || planId == null) return;
-      navigator.pop();
-      if (hostContext.mounted) hostContext.push('/circle/$circleId/plan/$planId');
-    } else if (n.type == 'comment') {
-      final targetType = n.data['target_type']?.toString();
-      final targetId = n.data['target_id']?.toString();
-      if (targetType == null || targetId == null) return;
-      navigator.pop();
-      if (hostContext.mounted) {
-        showCommentsSheet(hostContext, targetType: targetType, targetId: targetId);
-      }
-    }
+    if (!canOpenNotification(n)) return;
+    Navigator.of(context).pop();
+    if (hostContext.mounted) openNotificationTarget(hostContext, n);
   }
 
   static String _timeAgo(DateTime? date) {

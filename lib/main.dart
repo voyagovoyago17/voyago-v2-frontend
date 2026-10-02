@@ -4,6 +4,7 @@ import 'package:intl/date_symbol_data_local.dart';
 import 'package:sizer/sizer.dart';
 import 'core/config/app_environment.dart';
 import 'services/app_rating_service.dart';
+import 'services/push_notifications.dart';
 import 'services/storage_service.dart';
 import 'router.dart';
 import 'theme.dart';
@@ -17,6 +18,8 @@ void main() async {
   await AppConfig.ensureSessionMatchesBackend();
   // Compte les lancements pour la demande de note sur le store (sans bloquer le démarrage)
   AppRatingService.instance.init();
+  // Notifications push (inactives tant que Firebase n'est pas configuré)
+  await PushNotifications.instance.init();
   runApp(const ProviderScope(child: VoyagoApp()));
 }
 
@@ -26,6 +29,7 @@ class VoyagoApp extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final router = ref.watch(routerProvider);
+    ref.watch(pushNotificationsProvider);
 
     return Sizer(
       builder: (context, orientation, deviceType) {
@@ -33,6 +37,7 @@ class VoyagoApp extends ConsumerWidget {
           title: 'Voyagooo',
           theme: voyagoTheme,
           routerConfig: router,
+          scaffoldMessengerKey: PushNotifications.messengerKey,
           debugShowCheckedModeBanner: false,
           builder: (context, child) => _EnvironmentBanner(child: child!),
         );

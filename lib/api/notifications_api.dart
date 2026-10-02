@@ -47,4 +47,15 @@ class NotificationsApi {
     });
     return AppNotification.fromJson(data as Map<String, dynamic>);
   }
+
+  /// Enregistre le jeton push (FCM) de cet appareil pour le compte connecté
+  Future<void> registerDevice({required String token, required String platform, String? appVersion}) =>
+      _client.post(Endpoints.notificationDevices, data: {
+        'token': token,
+        'platform': platform,
+        if (appVersion != null) 'app_version': appVersion,
+      });
+
+  /// Oublie cet appareil : il ne reçoit plus les push du compte (déconnexion)
+  Future<void> unregisterDevice(String token) => _client.delete(Endpoints.notificationDevices, data: {'token': token});
 }
