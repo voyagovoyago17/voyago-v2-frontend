@@ -8,7 +8,7 @@ import '../providers/auth_provider.dart';
 import '../theme.dart';
 import '../widgets/circle_card.dart';
 import '../widgets/create_circle_modal.dart';
-import '../widgets/trip_card.dart';
+import '../widgets/community/feed_item_card.dart';
 
 class CommunityScreen extends ConsumerStatefulWidget {
   const CommunityScreen({super.key});
@@ -178,7 +178,7 @@ class _CommunityScreenState extends ConsumerState<CommunityScreen>
             icon: const Icon(Icons.refresh_outlined),
             onPressed: () {
               ref.invalidate(communityCirclesProvider);
-              ref.invalidate(communityFeedProvider);
+              ref.read(homeFeedProvider.notifier).refresh();
             },
           ),
         ],
@@ -207,9 +207,9 @@ class _CommunityScreenState extends ConsumerState<CommunityScreen>
                   child: Row(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      Text('🏕️', style: TextStyle(fontSize: 14)),
+                      Text('📰', style: TextStyle(fontSize: 14)),
                       SizedBox(width: 6),
-                      Text('Tribus & Cercles'),
+                      Text("Fil d'actualité"),
                     ],
                   ),
                 ),
@@ -217,9 +217,9 @@ class _CommunityScreenState extends ConsumerState<CommunityScreen>
                   child: Row(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      Text('✈️', style: TextStyle(fontSize: 14)),
+                      Text('🏕️', style: TextStyle(fontSize: 14)),
                       SizedBox(width: 6),
-                      Text('Voyages Récents'),
+                      Text('Tribus & Cercles'),
                     ],
                   ),
                 ),
@@ -231,8 +231,8 @@ class _CommunityScreenState extends ConsumerState<CommunityScreen>
       body: TabBarView(
         controller: _tabController,
         children: [
+          _buildHomeFeedTab(),
           _buildCirclesTab(),
-          _buildTripsFeedTab(),
         ],
       ),
     );
@@ -467,88 +467,98 @@ class _CommunityScreenState extends ConsumerState<CommunityScreen>
   // TAB 2: FLUX DE VOYAGES (LOGIQUE EXISTANTE 100% PRÉSERVÉE)
   // =========================================================================
 
-  Widget _buildTripsFeedTab() {
-    final feedAsync = ref.watch(communityFeedProvider);
+  // =========================================================================
+  // TAB 1: FIL D'ACTUALITÉ (voyages visibles + publications de mes cercles)
+  // =========================================================================
+
+  Widget _buildHomeFeedTab() {
+    final feed = ref.watch(homeFeedProvider);
+    final notifier = ref.read(homeFeedProvider.notifier);
+
+    if (feed.isLoading && feed.items.isEmpty) {
+      return const Center(child: CircularProgressIndicator(color: VoyagoColors.primary));
+    }
+
+    if (feed.error != null && feed.items.isEmpty) {
+      return Center(
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              const Text('😕', style: TextStyle(fontSize: 48)),
+              const SizedBox(height: 16),
+              Text(
+                feed.error is ApiException ? (feed.error as ApiException).message : feed.error.toString(),
+                style: const TextStyle(color: VoyagoColors.muted),
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 16),
+              ElevatedButton(onPressed: notifier.refresh, child: const Text('Réessayer')),
+            ],
+          ),
+        ),
+      );
+    }
 
     return RefreshIndicator(
-      onRefresh: () async => ref.refresh(communityFeedProvider.future),
+      onRefresh: notifier.refresh,
       color: VoyagoColors.primary,
       backgroundColor: VoyagoColors.surface,
-      child: feedAsync.when(
-        data: (items) {
-          if (items.isEmpty) {
-            return const Center(
-              child: Padding(
-                padding: EdgeInsets.all(24),
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Text('🦜', style: TextStyle(fontSize: 56)),
-                    SizedBox(height: 20),
-                    Text(
-                      'Aucun voyage partagé pour le moment 🦜',
-                      style: TextStyle(
-                        color: VoyagoColors.text,
-                        fontSize: 18,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                    SizedBox(height: 8),
-                    Text(
-                      'Soyez le premier explorateur à partager votre aventure avec Voyagooo !',
+      child: NotificationListener<ScrollNotification>(
+        onNotification: (n) {
+          // Charge la suite à l'approche du bas de la liste
+          if (n.metrics.pixels > n.metrics.maxScrollExtent - 600) notifier.loadMore();
+          return false;
+        },
+        child: feed.items.isEmpty
+            ? ListView(
+                physics: const AlwaysScrollableScrollPhysics(),
+                children: [
+                  const SizedBox(height: 80),
+                  const Center(child: Text('🦜', style: TextStyle(fontSize: 56))),
+                  const SizedBox(height: 20),
+                  const Text(
+                    'Ton fil est encore calme',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(color: VoyagoColors.text, fontSize: 18, fontWeight: FontWeight.bold),
+                  ),
+                  const SizedBox(height: 8),
+                  const Padding(
+                    padding: EdgeInsets.symmetric(horizontal: 32),
+                    child: Text(
+                      'Rejoins des tribus pour voir leurs publications et les voyages de leurs membres ici.',
                       style: TextStyle(color: VoyagoColors.muted),
                       textAlign: TextAlign.center,
                     ),
-                  ],
-                ),
-              ),
-            );
-          }
-
-          return ListView.builder(
-            padding: const EdgeInsets.only(top: 8, bottom: 32),
-            itemCount: items.length,
-            itemBuilder: (context, index) {
-              final item = items[index];
-              return TripCard(
-                trip: item.trip,
-                authorInfo: {
-                  'name': item.authorName,
-                  'pseudo': item.authorPseudo,
-                  'avatar_emoji': item.authorAvatarEmoji,
-                  'picture': item.authorPicture,
-                  'is_pro': item.authorIsPro,
+                  ),
+                  const SizedBox(height: 20),
+                  Center(
+                    child: ElevatedButton(
+                      onPressed: () => _tabController.animateTo(1),
+                      style: ElevatedButton.styleFrom(backgroundColor: VoyagoColors.primary),
+                      child: const Text('Découvrir les tribus', style: TextStyle(color: Colors.white)),
+                    ),
+                  ),
+                ],
+              )
+            : ListView.builder(
+                physics: const AlwaysScrollableScrollPhysics(),
+                padding: const EdgeInsets.only(top: 8, bottom: 32),
+                itemCount: feed.items.length + (feed.hasMore ? 1 : 0),
+                itemBuilder: (context, index) {
+                  if (index >= feed.items.length) {
+                    return const Padding(
+                      padding: EdgeInsets.all(20),
+                      child: Center(
+                        child: CircularProgressIndicator(strokeWidth: 2, color: VoyagoColors.primary),
+                      ),
+                    );
+                  }
+                  final item = feed.items[index];
+                  return FeedItemCard(key: ValueKey(item.key), item: item);
                 },
-                onTap: () => context.go('/itinerary/${item.trip.id}', extra: item.trip),
-              );
-            },
-          );
-        },
-        loading: () => const Center(
-          child: CircularProgressIndicator(color: VoyagoColors.primary),
-        ),
-        error: (e, _) => Center(
-          child: Padding(
-            padding: const EdgeInsets.all(24),
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                const Text('😕', style: TextStyle(fontSize: 48)),
-                const SizedBox(height: 16),
-                Text(
-                  e.toString(),
-                  style: const TextStyle(color: VoyagoColors.muted),
-                  textAlign: TextAlign.center,
-                ),
-                const SizedBox(height: 16),
-                ElevatedButton(
-                  onPressed: () => ref.invalidate(communityFeedProvider),
-                  child: const Text('Réessayer'),
-                ),
-              ],
-            ),
-          ),
-        ),
+              ),
       ),
     );
   }

@@ -6,6 +6,7 @@ import '../providers/auth_provider.dart';
 import '../providers/notifications_provider.dart';
 import '../theme.dart';
 import 'place_review_sheet.dart';
+import 'community/comments_sheet.dart';
 
 /// Cloche de notifications avec badge du nombre de non lues.
 class NotificationBell extends ConsumerWidget {
@@ -183,6 +184,7 @@ class _NotificationTile extends ConsumerWidget {
       'arrival' => (Icons.place_rounded, VoyagoColors.primary),
       'trip_ready' => (Icons.flight_takeoff_rounded, VoyagoColors.blue),
       'review_thanks' => (Icons.star_rounded, VoyagoColors.yellow),
+      'comment' => (Icons.mode_comment_rounded, VoyagoColors.primary),
       _ => (Icons.notifications_rounded, VoyagoColors.orange),
     };
     final canReview = n.isArrival && !n.isReviewed && n.lat != null && n.lng != null;
@@ -297,6 +299,14 @@ class _NotificationTile extends ConsumerWidget {
     } else if (n.type == 'trip_ready' && (n.tripId?.isNotEmpty ?? false)) {
       navigator.pop();
       if (hostContext.mounted) hostContext.go('/itinerary/${n.tripId}');
+    } else if (n.type == 'comment') {
+      final targetType = n.data['target_type']?.toString();
+      final targetId = n.data['target_id']?.toString();
+      if (targetType == null || targetId == null) return;
+      navigator.pop();
+      if (hostContext.mounted) {
+        showCommentsSheet(hostContext, targetType: targetType, targetId: targetId);
+      }
     }
   }
 

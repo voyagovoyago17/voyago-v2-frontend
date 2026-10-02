@@ -41,6 +41,11 @@ class Endpoints {
   static String circlePosts(String circleId) => '/api/community/circles/$circleId/posts';
   static String shareTripToCircle(String circleId) => '/api/community/circles/$circleId/share-trip';
   static String likeCommunityPost(String postId) => '/api/community/posts/$postId/like';
+  static String communityPost(String postId) => '/api/community/posts/$postId';
+  static const String homeFeed = '/api/community/home-feed';
+  static const String communityComments = '/api/community/comments';
+  static String communityComment(String commentId) => '/api/community/comments/$commentId';
+  static const String communityReports = '/api/community/reports';
 
   // --- GAMIFICATION MODULE ---
   static String profile(String userId) => '/api/profile/$userId';

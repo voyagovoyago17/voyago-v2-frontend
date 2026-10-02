@@ -17,6 +17,7 @@ import '../services/destination_service.dart';
 import 'package:emoji_picker_flutter/emoji_picker_flutter.dart' as ep;
 import 'package:animated_emoji/animated_emoji.dart';
 import '../theme.dart';
+import '../widgets/community/comments_sheet.dart';
 
 class CircleDetailScreen extends ConsumerStatefulWidget {
   final String circleId;
@@ -782,6 +783,7 @@ class _CircleDetailScreenState extends ConsumerState<CircleDetailScreen> {
                         return _PostCard(
                           post: post,
                           circleId: circle.id,
+                          canModerate: circle.myRole == 'creator' || circle.myRole == 'admin',
                           onTapTrip: (trip) => context.go('/itinerary/${trip.id}', extra: trip),
                         );
                       },
@@ -1048,11 +1050,63 @@ class _PostCard extends ConsumerWidget {
   final String circleId;
   final void Function(Trip trip) onTapTrip;
 
+  /// Créateur / admin du cercle : peut supprimer les publications des autres
+  final bool canModerate;
+
   const _PostCard({
     required this.post,
     required this.circleId,
     required this.onTapTrip,
+    this.canModerate = false,
   });
+
+  Future<void> _showMenu(BuildContext context, WidgetRef ref) async {
+    final me = ref.read(currentUserProvider)?.userId;
+    if (me == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Connectez-vous pour interagir avec ce post')),
+      );
+      return;
+    }
+    final isMine = post.userId == me;
+    final action = await showModalBottomSheet<String>(
+      context: context,
+      backgroundColor: VoyagoColors.surface,
+      builder: (ctx) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            if (isMine || canModerate)
+              ListTile(
+                leading: const Icon(Icons.delete_outline, color: VoyagoColors.coral),
+                title: const Text('Supprimer la publication', style: TextStyle(color: VoyagoColors.coral)),
+                onTap: () => Navigator.of(ctx).pop('delete'),
+              ),
+            if (!isMine)
+              ListTile(
+                leading: const Icon(Icons.flag_outlined, color: VoyagoColors.muted),
+                title: const Text('Signaler', style: TextStyle(color: VoyagoColors.text)),
+                onTap: () => Navigator.of(ctx).pop('report'),
+              ),
+          ],
+        ),
+      ),
+    );
+    if (!context.mounted) return;
+    if (action == 'report') {
+      await reportContent(context, ref, targetType: 'post', targetId: post.id);
+    } else if (action == 'delete') {
+      try {
+        await ref.read(communityControllerProvider).deletePost(postId: post.id, circleId: circleId);
+      } on ApiException catch (e) {
+        if (context.mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(backgroundColor: VoyagoColors.coral, content: Text(e.message)),
+          );
+        }
+      }
+    }
+  }
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -1295,6 +1349,39 @@ class _PostCard extends ConsumerWidget {
               ),
             ),
           ],
+
+          // Commentaires & menu
+          const SizedBox(height: 8),
+          Row(
+            children: [
+              TextButton.icon(
+                onPressed: () => showCommentsSheet(
+                  context,
+                  targetType: 'post',
+                  targetId: post.id,
+                  onCountChanged: (count) {
+                    if (count != post.commentsCount) ref.invalidate(circlePostsProvider(circleId));
+                  },
+                ),
+                style: TextButton.styleFrom(
+                  foregroundColor: VoyagoColors.muted,
+                  padding: const EdgeInsets.symmetric(horizontal: 8),
+                ),
+                icon: const Icon(Icons.mode_comment_outlined, size: 17),
+                label: Text(
+                  post.commentsCount > 0
+                      ? '${post.commentsCount} commentaire${post.commentsCount > 1 ? 's' : ''}'
+                      : 'Commenter',
+                  style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
+                ),
+              ),
+              const Spacer(),
+              IconButton(
+                icon: const Icon(Icons.more_horiz, color: VoyagoColors.muted),
+                onPressed: () => _showMenu(context, ref),
+              ),
+            ],
+          ),
         ],
       ),
     );

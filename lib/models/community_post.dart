@@ -12,6 +12,7 @@ class CommunityPost {
   final List<String> imageUrls;
   final int likesCount;
   final List<String> likedBy;
+  final int commentsCount;
   final DateTime createdAt;
   final Map<String, dynamic>? author;
   final Trip? trip;
@@ -28,6 +29,7 @@ class CommunityPost {
     this.imageUrls = const [],
     this.likesCount = 0,
     this.likedBy = const [],
+    this.commentsCount = 0,
     required this.createdAt,
     this.author,
     this.trip,
@@ -58,6 +60,7 @@ class CommunityPost {
       imageUrls: parseList(json['image_urls']),
       likesCount: (json['likes_count'] as num?)?.toInt() ?? 0,
       likedBy: parseList(json['liked_by']),
+      commentsCount: (json['comments_count'] as num?)?.toInt() ?? 0,
       createdAt: json['created_at'] != null
           ? DateTime.tryParse(json['created_at'].toString()) ?? DateTime.now()
           : DateTime.now(),

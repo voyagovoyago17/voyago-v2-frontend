@@ -1,6 +1,8 @@
 import '../models/trip.dart';
 import '../models/community_circle.dart';
 import '../models/community_post.dart';
+import '../models/community_comment.dart';
+import '../models/feed_item.dart';
 import 'dio_client.dart';
 import 'endpoints.dart';
 
@@ -155,6 +157,74 @@ class CommunityApi {
   Future<Map<String, dynamic>> joinCircle(String circleId) async {
     final data = await _client.post(Endpoints.joinCircle(circleId));
     return data as Map<String, dynamic>;
+  }
+
+  // =========================================================================
+  // FIL D'ACTUALITÉ, COMMENTAIRES & MODÉRATION
+  // =========================================================================
+
+  /// Fil d'actualité : voyages visibles + publications de mes cercles
+  Future<FeedPage> getHomeFeed({String? before, int limit = 20}) async {
+    final data = await _client.get(
+      Endpoints.homeFeed,
+      queryParameters: {'limit': limit, if (before != null) 'before': before},
+    );
+    final json = data as Map<String, dynamic>;
+    final items = (json['items'] as List? ?? [])
+        .map((e) => FeedItem.fromJson(e as Map<String, dynamic>))
+        .toList();
+    return FeedPage(items: items, nextBefore: json['next_before']?.toString());
+  }
+
+  Future<List<CommunityComment>> getComments(String targetType, String targetId) async {
+    final data = await _client.get(
+      Endpoints.communityComments,
+      queryParameters: {'target_type': targetType, 'target_id': targetId},
+    );
+    if (data is List) {
+      return data.map((e) => CommunityComment.fromJson(e as Map<String, dynamic>)).toList();
+    }
+    return [];
+  }
+
+  Future<CommunityComment> addComment({
+    required String targetType,
+    required String targetId,
+    required String content,
+    String? parentId,
+  }) async {
+    final data = await _client.post(
+      Endpoints.communityComments,
+      data: {
+        'target_type': targetType,
+        'target_id': targetId,
+        'content': content.trim(),
+        if (parentId != null) 'parent_id': parentId,
+      },
+    );
+    return CommunityComment.fromJson(data as Map<String, dynamic>);
+  }
+
+  /// Supprime un commentaire et ses réponses ; renvoie le nombre de commentaires supprimés
+  Future<int> deleteComment(String commentId) async {
+    final data = await _client.delete(Endpoints.communityComment(commentId));
+    return ((data as Map<String, dynamic>)['deleted_count'] as num?)?.toInt() ?? 1;
+  }
+
+  Future<void> deletePost(String postId) async {
+    await _client.delete(Endpoints.communityPost(postId));
+  }
+
+  /// Signaler un voyage, une publication ou un commentaire
+  Future<void> report({required String targetType, required String targetId, String? reason}) async {
+    await _client.post(
+      Endpoints.communityReports,
+      data: {
+        'target_type': targetType,
+        'target_id': targetId,
+        if (reason != null && reason.trim().isNotEmpty) 'reason': reason.trim(),
+      },
+    );
   }
 
   /// Rejoindre un cercle privé grâce à son code d'invitation (renvoie circle_id, slug, name)
