@@ -81,6 +81,8 @@ class _ItineraryScreenState extends ConsumerState<ItineraryScreen>
   final ValueNotifier<LatLng?> _radarPosition = ValueNotifier(null);
   final Set<String> _dismissedGemAlerts = {};
   String? _collectingGemId;
+  String? _activeGemId;                       // pépite touchée sur la carte (fiche ouverte)
+  final Set<String> _gemsIntroShown = {};     // annonce « N pépites sur ta carte » déjà faite
 
   /// Rayon d'alerte : une pépite à moins de 400 m déclenche la bannière de détour
   static const double _gemAlertRadiusM = 400;
@@ -881,6 +883,70 @@ class _ItineraryScreenState extends ConsumerState<ItineraryScreen>
     );
   }
 
+  /// Message quand les pépites ne se ramassent pas encore (null si le radar est actif).
+  String? _gemsLockedMessage(TripGems data) {
+    if (data.active) return null;
+    if (data.needsStart) return 'Démarre ton voyage depuis le radar pour les ramasser sur place.';
+    final start = data.startsAt;
+    if (start != null) return 'Se ramasse sur place pendant ton voyage, dès le ${start.day}/${start.month}.';
+    return null;
+  }
+
+  /// Toucher une pépite : sur place on la ramasse directement, sinon on ouvre sa fiche.
+  void _onGemTap(Trip trip, TripGems data, TripGem gem) {
+    final pos = _liveUserPosition;
+    final inRange = data.active && pos != null && _gemInRange(data, gem.distanceFrom(pos.latitude, pos.longitude));
+    if (inRange) {
+      _collectGem(trip, gem);
+      return;
+    }
+    HapticFeedback.selectionClick();
+    setState(() {
+      _activeGemId = gem.id;
+      _activePoiIndex = null;
+    });
+    _animatedMapController.animateTo(dest: LatLng(gem.lat, gem.lng), zoom: 16);
+  }
+
+  /// Première apparition des pépites d'un voyage : on les annonce et on propose d'y aller.
+  void _announceGems(Trip trip, TripGems data) {
+    if (_gemsIntroShown.contains(trip.id) || data.ended || data.remaining.isEmpty) return;
+    _gemsIntroShown.add(trip.id);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      final count = data.remaining.length;
+      _showSafeSnackBar(SnackBar(
+        backgroundColor: const Color(0xFF10221F),
+        behavior: SnackBarBehavior.floating,
+        duration: const Duration(seconds: 6),
+        content: Row(
+          children: [
+            const Icon(Icons.diamond_rounded, color: radarColor),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Text(
+                '$count pépite${count > 1 ? 's' : ''} cachée${count > 1 ? 's' : ''} autour de ton itinéraire '
+                '(${data.remaining.fold<int>(0, (sum, g) => sum + g.xp)} XP à gagner)',
+                style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w600),
+              ),
+            ),
+          ],
+        ),
+        action: SnackBarAction(
+          label: 'VOIR',
+          textColor: radarColor,
+          onPressed: () {
+            // La pépite la plus proche de moi, sinon la première du jour affiché
+            final nearest = _nearestGem(data)?.gem;
+            final ofDay = data.remaining.where((g) => g.day == _selectedDay);
+            final target = nearest ?? (ofDay.isNotEmpty ? ofDay.first : data.remaining.first);
+            _onGemTap(trip, data, target);
+          },
+        ),
+      ));
+    });
+  }
+
   /// Détour vers une pépite : tracé de guidage depuis ma position, sans changer l'itinéraire.
   void _detourToGem(TripGem gem) {
     final poi = gem.toPoi();
@@ -896,6 +962,7 @@ class _ItineraryScreenState extends ConsumerState<ItineraryScreen>
     try {
       final xp = await ref.read(tripsApiProvider).collectGem(trip.id, gem.id, lat: pos.latitude, lng: pos.longitude);
       HapticFeedback.mediumImpact();
+      if (mounted) setState(() => _activeGemId = null);
       ref.invalidate(tripGemsProvider(trip.id));
       final userId = ref.read(currentUserProvider)?.userId;
       if (userId != null) ref.invalidate(profileProvider(userId));
@@ -920,6 +987,15 @@ class _ItineraryScreenState extends ConsumerState<ItineraryScreen>
     final showGemAlert = nearestGem != null &&
         nearestGem.distance <= _gemAlertRadiusM &&
         !_dismissedGemAlerts.contains(nearestGem.gem.id);
+    // Pépites affichées dès que le voyage en a (verrouillées avant le voyage), jusqu'à sa fin
+    final showGems = gemsData != null && !gemsData.ended && gemsData.remaining.isNotEmpty;
+    if (showGems) _announceGems(trip, gemsData);
+    TripGem? activeGem;
+    if (gemsData != null && _activeGemId != null) {
+      for (final g in gemsData.remaining) {
+        if (g.id == _activeGemId) activeGem = g;
+      }
+    }
 
     // Trajets inter-étapes du jour affiché : (re)calculés à chaque changement de voyage ou de jour
     if (_transitRoutesKey != '${trip.id}|$_selectedDay') {
@@ -992,6 +1068,7 @@ class _ItineraryScreenState extends ConsumerState<ItineraryScreen>
                 onTap: (_, __) {
                   setState(() {
                     _activePoiIndex = null;
+                    _activeGemId = null;
                     _searchResults = [];
                     _isSearching = false;
                   });
@@ -1078,6 +1155,7 @@ class _ItineraryScreenState extends ConsumerState<ItineraryScreen>
                           setState(() {
                             _activePoiIndex =
                                 _activePoiIndex == i ? null : i;
+                            _activeGemId = null;
                           });
                           _animatedMapController.animateTo(
                             dest: LatLng(poi.lat, poi.lng),
@@ -1090,21 +1168,24 @@ class _ItineraryScreenState extends ConsumerState<ItineraryScreen>
                 ),
 
                 // === RADAR : ondes autour de moi et pépites à ramasser (pendant le voyage) ===
-                if (gemsData != null && gemsData.active)
+                if (showGems)
                   MarkerLayer(
                     markers: [
-                      if (_liveUserPosition != null)
+                      if (gemsData.active && _liveUserPosition != null)
                         Marker(point: _liveUserPosition!, width: 220, height: 220, child: const RadarPulse()),
                       for (final g in gemsData.remaining)
                         Marker(
                           point: LatLng(g.lat, g.lng),
-                          width: 34,
-                          height: 34,
+                          width: gemMarkerWidth,
+                          height: gemMarkerHeight,
                           child: GemMapMarker(
                             gem: g,
-                            inRange: _liveUserPosition != null &&
+                            locked: !gemsData.active,
+                            selected: _activeGemId == g.id,
+                            inRange: gemsData.active &&
+                                _liveUserPosition != null &&
                                 _gemInRange(gemsData, g.distanceFrom(_liveUserPosition!.latitude, _liveUserPosition!.longitude)),
-                            onTap: () => _openRadar(trip),
+                            onTap: () => _onGemTap(trip, gemsData, g),
                           ),
                         ),
                     ],
@@ -1354,7 +1435,7 @@ class _ItineraryScreenState extends ConsumerState<ItineraryScreen>
 
           // === 3. DYNAMIC WEATHER OVERLAY (TRANSPARENT, SANS FOND OPAQUE, MINIFIABLE) ===
           // Masquée tant qu'une fiche de lieu est ouverte (même emplacement)
-          if (activeWeather != null && _showWeatherCard && _activePoiIndex == null)
+          if (activeWeather != null && _showWeatherCard && _activePoiIndex == null && activeGem == null)
             Positioned(
               top: MediaQuery.of(context).padding.top + 68,
               left: 0,
@@ -1385,7 +1466,24 @@ class _ItineraryScreenState extends ConsumerState<ItineraryScreen>
               duration: const Duration(milliseconds: 420),
               reverseDuration: const Duration(milliseconds: 200),
               transitionBuilder: poiSpotlightTransition,
-              child: _activePoiIndex != null && _activePoiIndex! < dayPois.length
+              child: activeGem != null
+                  ? GemSpotlightCard(
+                      key: ValueKey('gem-spotlight-${activeGem.id}'),
+                      gem: activeGem,
+                      distanceM: _liveUserPosition == null
+                          ? null
+                          : activeGem.distanceFrom(_liveUserPosition!.latitude, _liveUserPosition!.longitude),
+                      canCollect: gemsData!.active &&
+                          _liveUserPosition != null &&
+                          _gemInRange(gemsData, activeGem.distanceFrom(_liveUserPosition!.latitude, _liveUserPosition!.longitude)),
+                      collecting: _collectingGemId == activeGem.id,
+                      lockedMessage: _gemsLockedMessage(gemsData),
+                      onClose: () => setState(() => _activeGemId = null),
+                      onCollect: () => _collectGem(trip, activeGem!),
+                      onDetour: () => _detourToGem(activeGem!),
+                      onOpenRadar: () => _openRadar(trip),
+                    )
+                  : _activePoiIndex != null && _activePoiIndex! < dayPois.length
                   ? PoiSpotlightCard(
                       key: ValueKey('spotlight-${dayPois[_activePoiIndex!].name}'),
                       poi: dayPois[_activePoiIndex!],
@@ -1595,7 +1693,10 @@ class _ItineraryScreenState extends ConsumerState<ItineraryScreen>
             },
             onPoiTap: (poi) {
               final idx = dayPois.indexOf(poi);
-              setState(() => _activePoiIndex = idx >= 0 ? idx : null);
+              setState(() {
+                _activePoiIndex = idx >= 0 ? idx : null;
+                _activeGemId = null;
+              });
               _animatedMapController.animateTo(dest: LatLng(poi.lat, poi.lng), zoom: 15);
             },
           ),
