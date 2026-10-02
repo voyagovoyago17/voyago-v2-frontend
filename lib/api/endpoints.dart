@@ -1,37 +1,10 @@
-import 'dart:io';
-import 'package:flutter/foundation.dart';
+import '../core/config/app_environment.dart';
 
 class Endpoints {
   Endpoints._();
 
-  // Configuration dynamique de l'hôte Backend
-  static const String _envBackendUrl = String.fromEnvironment('BACKEND_URL');
-
-  // Hôtes Backend (Port NestJS : 3333)
-  static const String localNetworkBackendUrl = 'http://192.168.1.81:3333';
-  // static const String localNetworkBackendUrl = 'http://10.75.1.6:3333'; // Autre réseau
-  static const String androidEmulatorBackendUrl = 'http://10.0.2.2:3333';
-  static const String localhostBackendUrl = 'http://127.0.0.1:3333';
-
-  // false = Tunnel USB adb reverse (recommandé en développement avec câble, insensible au pare-feu/Wi-Fi)
-  // true = IP locale Wi-Fi (nécessite d'autoriser le port 3333 dans le pare-feu Windows)
-  static const bool useLanIpForDevice = false;
-
-  static String get baseUrl {
-    if (_envBackendUrl.isNotEmpty) {
-      return _envBackendUrl;
-    }
-    if (kIsWeb) {
-      return localhostBackendUrl;
-    }
-    if (Platform.isAndroid) {
-      if (useLanIpForDevice) {
-        return localNetworkBackendUrl;
-      }
-      return localhostBackendUrl;
-    }
-    return localhostBackendUrl;
-  }
+  // URL du backend selon l'environnement (local / prod), voir AppConfig
+  static String get baseUrl => AppConfig.backendUrl;
 
   // --- HEALTH & DOCS ---
   static const String health = '/api';

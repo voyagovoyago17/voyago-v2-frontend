@@ -125,6 +125,15 @@ class SecureStorageService {
     ]);
   }
 
+  // --- CLEAR SESSION LIÉE AU BACKEND (changement local <-> prod) ---
+  Future<void> clearBackendSession() async {
+    await Future.wait([
+      clearAuth(),
+      clearTenantId(),
+      _storage.delete(key: _keyGuestUserId),
+    ]);
+  }
+
   // --- CLEAR COMPLETE STORAGE ---
   Future<void> clearAll() async {
     await _storage.deleteAll();

@@ -122,27 +122,24 @@ flutter run
 
 ## ⚙️ Configuration
 
-Dans `lib/services/api_service.dart`, l'URL du backend s'adapte automatiquement selon la plateforme ou via `--dart-define` :
+L'environnement backend est géré dans `lib/core/config/app_environment.dart` (`AppConfig`) :
 
-```dart
-// IP locale actuelle de la machine : 192.168.1.81 (Port 3333)
+| Environnement | URL backend | Activé par |
+|---|---|---|
+| **LOCAL** | `http://127.0.0.1:3333` | par défaut en `flutter run` (debug/profile) |
+| **PROD** | `https://api.voyagooo.com` ([docs](https://api.voyagooo.com/api/docs)) | par défaut en `flutter build` (release) |
 
-// 1. Émulateur Android (redirection automatique)
-const String androidEmulatorBackendUrl = 'http://10.0.2.2:3333';
-
-// 2. Vrai téléphone / Appareil physique (Wi-Fi local)
-const String localNetworkBackendUrl = 'http://192.168.1.81:3333';
-
-// 3. Simulateur iOS / Web / Desktop
-const String localhostBackendUrl = 'http://localhost:3333';
+```bash
+flutter run                                  # LOCAL
+flutter run --dart-define=APP_ENV=prod       # PROD depuis un build de dev
+flutter build apk --dart-define=APP_ENV=local # release pointant sur le local
+flutter run --dart-define=BACKEND_URL=http://192.168.1.81:3333  # URL personnalisée (prioritaire)
 ```
 
-> **Astuce :** Vous pouvez aussi surcharger l'URL au lancement sans modifier le code :
-> ```bash
-> flutter run --dart-define=BACKEND_URL=http://192.168.1.81:3333
-> ```
-
----
+- Un bandeau **LOCAL** (bleu) ou **PROD** (rouge) s'affiche en haut à droite, sauf dans une release de prod.
+- L'environnement et l'URL sont loggés au démarrage (`🌍 [ENV] ...`).
+- En changeant de backend entre deux lancements, la session est automatiquement réinitialisée (un compte local n'existe pas en prod).
+- Téléphone physique en local : `adb reverse tcp:3333 tcp:3333`, ou passer `useLanIpForDevice` à `true` / utiliser `BACKEND_URL`.
 
 ## ▶️ Lancer l'app
 
