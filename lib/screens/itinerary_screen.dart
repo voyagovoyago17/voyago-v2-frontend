@@ -23,6 +23,7 @@ import '../services/route_service.dart';
 import '../services/cached_tile_provider.dart';
 import '../theme.dart';
 import '../widgets/weather_overlay.dart';
+import '../widgets/poi_spotlight_card.dart';
 import '../widgets/itinerary_bottom_sheet.dart';
 import '../widgets/map_poi_pin.dart';
 import '../widgets/traveler_drawer.dart';
@@ -1249,7 +1250,8 @@ class _ItineraryScreenState extends ConsumerState<ItineraryScreen>
           ),
 
           // === 3. DYNAMIC WEATHER OVERLAY (TRANSPARENT, SANS FOND OPAQUE, MINIFIABLE) ===
-          if (activeWeather != null && _showWeatherCard)
+          // Masquée tant qu'une fiche de lieu est ouverte (même emplacement)
+          if (activeWeather != null && _showWeatherCard && _activePoiIndex == null)
             Positioned(
               top: MediaQuery.of(context).padding.top + 68,
               left: 0,
@@ -1270,6 +1272,28 @@ class _ItineraryScreenState extends ConsumerState<ItineraryScreen>
                 ),
               ),
             ),
+
+          // === 3 bis. FICHE DU LIEU TOUCHÉ SUR LA CARTE (photo, infos, résumé) ===
+          Positioned(
+            top: MediaQuery.of(context).padding.top + 68,
+            left: 0,
+            right: 0,
+            child: AnimatedSwitcher(
+              duration: const Duration(milliseconds: 420),
+              reverseDuration: const Duration(milliseconds: 200),
+              transitionBuilder: poiSpotlightTransition,
+              child: _activePoiIndex != null && _activePoiIndex! < dayPois.length
+                  ? PoiSpotlightCard(
+                      key: ValueKey('spotlight-${dayPois[_activePoiIndex!].name}'),
+                      poi: dayPois[_activePoiIndex!],
+                      index: _activePoiIndex!,
+                      routeFromMe: _poiDistances?[_activePoiIndex!],
+                      onClose: () => setState(() => _activePoiIndex = null),
+                      onNavigate: () => _navigateToPoi(dayPois[_activePoiIndex!]),
+                    )
+                  : const SizedBox.shrink(key: ValueKey('spotlight-none')),
+            ),
+          ),
 
           // === 4. MAP CONTROLS (Right Side) ===
           Positioned(
