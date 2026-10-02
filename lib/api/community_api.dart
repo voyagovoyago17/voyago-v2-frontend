@@ -3,6 +3,7 @@ import '../models/community_circle.dart';
 import '../models/community_post.dart';
 import '../models/community_comment.dart';
 import '../models/feed_item.dart';
+import 'api_exceptions.dart';
 import 'dio_client.dart';
 import 'endpoints.dart';
 
@@ -165,15 +166,41 @@ class CommunityApi {
 
   /// Fil d'actualité : voyages visibles + publications de mes cercles
   Future<FeedPage> getHomeFeed({String? before, int limit = 20}) async {
-    final data = await _client.get(
-      Endpoints.homeFeed,
-      queryParameters: {'limit': limit, if (before != null) 'before': before},
-    );
+    final dynamic data;
+    try {
+      data = await _client.get(
+        Endpoints.homeFeed,
+        queryParameters: {'limit': limit, if (before != null) 'before': before},
+      );
+    } on ApiException catch (e) {
+      // Backend pas encore à jour : on se rabat sur l'ancien fil des voyages publics
+      if (e.statusCode != 404) rethrow;
+      if (before != null) return const FeedPage(items: []);
+      return FeedPage(items: (await getPublicFeed()).map(_legacyFeedItem).toList());
+    }
     final json = data as Map<String, dynamic>;
     final items = (json['items'] as List? ?? [])
         .map((e) => FeedItem.fromJson(e as Map<String, dynamic>))
         .toList();
     return FeedPage(items: items, nextBefore: json['next_before']?.toString());
+  }
+
+  FeedItem _legacyFeedItem(CommunityTripItem item) {
+    return FeedItem(
+      type: 'trip',
+      id: item.trip.id,
+      createdAt: item.trip.createdAt,
+      author: {
+        'user_id': item.trip.userId,
+        'name': item.authorName,
+        'pseudo': item.authorPseudo,
+        'avatar_emoji': item.authorAvatarEmoji,
+        'picture': item.authorPicture,
+        'is_pro': item.authorIsPro,
+      },
+      trip: item.trip,
+      likes: item.trip.likes,
+    );
   }
 
   Future<List<CommunityComment>> getComments(String targetType, String targetId) async {
