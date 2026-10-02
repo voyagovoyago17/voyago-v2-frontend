@@ -19,6 +19,7 @@ import 'package:animated_emoji/animated_emoji.dart';
 import '../theme.dart';
 import '../widgets/community/comments_sheet.dart';
 import '../widgets/community/social_actions.dart';
+import '../widgets/community/tribe_sections.dart';
 
 class CircleDetailScreen extends ConsumerStatefulWidget {
   final String circleId;
@@ -154,6 +155,8 @@ class _CircleDetailScreenState extends ConsumerState<CircleDetailScreen> {
       body: circleAsync.when(
         data: (circle) => RefreshIndicator(
           onRefresh: () async {
+            ref.invalidate(circleChallengesProvider(circle.id));
+            ref.invalidate(circleTripPlansProvider(circle.id));
             await Future.wait([
               ref.refresh(circleDetailProvider(widget.circleId).future),
               ref.refresh(circlePostsProvider(widget.circleId).future),
@@ -496,6 +499,12 @@ class _CircleDetailScreenState extends ConsumerState<CircleDetailScreen> {
                           ),
                         ],
                       ),
+
+                      // Défis du mois & voyages de tribu
+                      const SizedBox(height: 24),
+                      TribeChallengesCard(circleId: circle.id),
+                      const SizedBox(height: 20),
+                      TribeTripsSection(circle: circle),
 
                       // 3. REAL JOINED MEMBERS SECTION ("Les membres qui ont rejoint")
                       const SizedBox(height: 24),

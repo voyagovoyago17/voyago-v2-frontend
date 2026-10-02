@@ -15,6 +15,7 @@ import 'screens/community_screen.dart';
 import 'screens/xp_rewards_screen.dart';
 import 'screens/public_user_screen.dart';
 import 'screens/circle_detail_screen.dart';
+import 'screens/tribe_plan_screen.dart';
 import 'screens/onboarding_screen.dart';
 import 'screens/welcome_screen.dart';
 import 'screens/journal_screen.dart';
@@ -143,6 +144,13 @@ final routerProvider = Provider<GoRouter>((ref) {
           final circleId = state.pathParameters['circleId'] ?? '';
           return CircleDetailScreen(circleId: circleId);
         },
+      ),
+      GoRoute(
+        path: '/circle/:circleId/plan/:planId',
+        builder: (context, state) => TribePlanScreen(
+          circleId: state.pathParameters['circleId'] ?? '',
+          planId: state.pathParameters['planId'] ?? '',
+        ),
       ),
       GoRoute(
         path: '/journal',

@@ -3,6 +3,7 @@ import '../models/community_circle.dart';
 import '../models/community_post.dart';
 import '../models/community_comment.dart';
 import '../models/feed_item.dart';
+import '../models/tribe.dart';
 import 'api_exceptions.dart';
 import 'dio_client.dart';
 import 'endpoints.dart';
@@ -236,6 +237,71 @@ class CommunityApi {
   Future<int> deleteComment(String commentId) async {
     final data = await _client.delete(Endpoints.communityComment(commentId));
     return ((data as Map<String, dynamic>)['deleted_count'] as num?)?.toInt() ?? 1;
+  }
+
+  // =========================================================================
+  // VOYAGES DE TRIBU & DÉFIS
+  // =========================================================================
+
+  Future<CircleChallenges> getChallenges(String circleId) async {
+    final data = await _client.get(Endpoints.circleChallenges(circleId));
+    return CircleChallenges.fromJson(data as Map<String, dynamic>);
+  }
+
+  Future<List<TribeTripPlan>> getTripPlans(String circleId) async {
+    final data = await _client.get(Endpoints.circleTripPlans(circleId));
+    if (data is List) {
+      return data.map((e) => TribeTripPlan.fromJson(e as Map<String, dynamic>)).toList();
+    }
+    return [];
+  }
+
+  /// Lance un voyage de tribu (l'IA prépare les lieux : peut prendre jusqu'à une minute)
+  Future<TribeTripPlan> createTripPlan(
+    String circleId, {
+    required String destination,
+    required int durationDays,
+    String? pace,
+    String? startDate,
+  }) async {
+    final data = await _client.post(
+      Endpoints.circleTripPlans(circleId),
+      data: {
+        'destination': destination.trim(),
+        'duration_days': durationDays,
+        if (pace != null) 'pace': pace,
+        if (startDate != null) 'start_date': startDate,
+      },
+    );
+    return TribeTripPlan.fromJson(data as Map<String, dynamic>);
+  }
+
+  Future<TribeTripPlan> getTripPlan(String planId) async {
+    final data = await _client.get(Endpoints.tripPlan(planId));
+    return TribeTripPlan.fromJson(data as Map<String, dynamic>);
+  }
+
+  /// Vote 'up' ou 'down' ; renvoie les nouveaux totaux du lieu
+  Future<Map<String, dynamic>> voteTripPlan(String planId, String poiKey, String vote) async {
+    final data = await _client.post(
+      Endpoints.tripPlanVotes(planId),
+      data: {'poi_key': poiKey, 'vote': vote},
+    );
+    return data as Map<String, dynamic>;
+  }
+
+  Future<TribeTripPlan> finalizeTripPlan(String planId) async {
+    final data = await _client.post(Endpoints.tripPlanFinalize(planId));
+    return TribeTripPlan.fromJson(data as Map<String, dynamic>);
+  }
+
+  /// Ajoute le voyage de tribu finalisé à mes voyages
+  Future<Trip> joinTripPlan(String planId, {String? startDate}) async {
+    final data = await _client.post(
+      Endpoints.tripPlanJoin(planId),
+      data: {if (startDate != null) 'start_date': startDate},
+    );
+    return Trip.fromJson(data as Map<String, dynamic>);
   }
 
   Future<void> blockUser(String userId) async {

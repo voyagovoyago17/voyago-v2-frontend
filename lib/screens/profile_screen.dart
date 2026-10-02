@@ -1372,6 +1372,13 @@ class _ProfileContentState extends ConsumerState<_ProfileContent> {
         'description': 'Un voyageur a refait un de ses voyages.',
       },
       {
+        'id': 'esprit_tribu',
+        'title': 'Esprit de Tribu',
+        'tier': 'Tier 2',
+        'emoji': '🏕️',
+        'description': 'A réussi un premier défi de cercle avec sa tribu.',
+      },
+      {
         'id': 'voyago_pro',
         'title': 'Voyagooo Pro',
         'tier': 'Tier 3',

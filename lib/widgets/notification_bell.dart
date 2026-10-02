@@ -186,6 +186,7 @@ class _NotificationTile extends ConsumerWidget {
       'review_thanks' => (Icons.star_rounded, VoyagoColors.yellow),
       'comment' => (Icons.mode_comment_rounded, VoyagoColors.primary),
       'trip_remixed' => (Icons.explore_rounded, VoyagoColors.yellow),
+      'tribe_trip' => (Icons.groups_rounded, VoyagoColors.primary),
       _ => (Icons.notifications_rounded, VoyagoColors.orange),
     };
     final canReview = n.isArrival && !n.isReviewed && n.lat != null && n.lng != null;
@@ -300,6 +301,12 @@ class _NotificationTile extends ConsumerWidget {
     } else if ((n.type == 'trip_ready' || n.type == 'trip_remixed') && (n.tripId?.isNotEmpty ?? false)) {
       navigator.pop();
       if (hostContext.mounted) hostContext.go('/itinerary/${n.tripId}');
+    } else if (n.type == 'tribe_trip') {
+      final circleId = n.data['circle_id']?.toString();
+      final planId = n.data['plan_id']?.toString();
+      if (circleId == null || planId == null) return;
+      navigator.pop();
+      if (hostContext.mounted) hostContext.push('/circle/$circleId/plan/$planId');
     } else if (n.type == 'comment') {
       final targetType = n.data['target_type']?.toString();
       final targetId = n.data['target_id']?.toString();

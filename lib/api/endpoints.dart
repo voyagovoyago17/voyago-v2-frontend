@@ -37,6 +37,12 @@ class Endpoints {
   static String circleDetail(String circleId) => '/api/community/circles/$circleId';
   static const String joinCircleByCode = '/api/community/circles/join-by-code';
   static String circleInviteCode(String circleId) => '/api/community/circles/$circleId/invite-code';
+  static String circleChallenges(String circleId) => '/api/community/circles/$circleId/challenges';
+  static String circleTripPlans(String circleId) => '/api/community/circles/$circleId/trip-plans';
+  static String tripPlan(String planId) => '/api/community/trip-plans/$planId';
+  static String tripPlanVotes(String planId) => '/api/community/trip-plans/$planId/votes';
+  static String tripPlanFinalize(String planId) => '/api/community/trip-plans/$planId/finalize';
+  static String tripPlanJoin(String planId) => '/api/community/trip-plans/$planId/join';
   static String joinCircle(String circleId) => '/api/community/circles/$circleId/join';
   static String leaveCircle(String circleId) => '/api/community/circles/$circleId/leave';
   static String circlePosts(String circleId) => '/api/community/circles/$circleId/posts';

@@ -3,6 +3,7 @@ import '../api/api.dart';
 import '../models/community_circle.dart';
 import '../models/community_post.dart';
 import '../models/feed_item.dart';
+import '../models/tribe.dart';
 import 'auth_provider.dart';
 import 'trips_provider.dart';
 
@@ -168,6 +169,24 @@ final circleDetailProvider = FutureProvider.family<CommunityCircle, String>((ref
 final circlePostsProvider = FutureProvider.family<List<CommunityPost>, String>((ref, circleId) async {
   final api = ref.watch(communityApiProvider);
   return api.getCirclePosts(circleId);
+});
+
+/// Défis du mois d'un cercle
+final circleChallengesProvider = FutureProvider.family<CircleChallenges, String>((ref, circleId) async {
+  ref.watch(currentUserProvider.select((u) => u?.userId));
+  return ref.watch(communityApiProvider).getChallenges(circleId);
+});
+
+/// Voyages de tribu d'un cercle
+final circleTripPlansProvider = FutureProvider.family<List<TribeTripPlan>, String>((ref, circleId) async {
+  ref.watch(currentUserProvider.select((u) => u?.userId));
+  return ref.watch(communityApiProvider).getTripPlans(circleId);
+});
+
+/// Détail d'un voyage de tribu
+final tripPlanProvider = FutureProvider.family<TribeTripPlan, String>((ref, planId) async {
+  ref.watch(currentUserProvider.select((u) => u?.userId));
+  return ref.watch(communityApiProvider).getTripPlan(planId);
 });
 
 // =========================================================================
