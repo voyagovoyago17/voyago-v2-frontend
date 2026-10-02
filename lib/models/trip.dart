@@ -1,5 +1,8 @@
 import 'poi.dart';
 import 'day_weather.dart';
+import 'trip_visibility.dart';
+
+export 'trip_visibility.dart';
 
 class Trip {
   final String id;
@@ -19,6 +22,7 @@ class Trip {
   final String? startDate;
   final String? endDate;
   final bool isPublic;
+  final TripVisibility visibility;
   final int likes;
   final DateTime createdAt;
 
@@ -43,6 +47,7 @@ class Trip {
     this.startDate,
     this.endDate,
     required this.isPublic,
+    this.visibility = TripVisibility.private,
     required this.likes,
     required this.createdAt,
     this.completedAt,
@@ -94,6 +99,10 @@ class Trip {
       pois: parsePois(json['pois']),
       weather: parseWeather(json['weather']),
       isPublic: json['is_public'] as bool? ?? json['isPublic'] as bool? ?? false,
+      visibility: TripVisibility.fromJson(
+        json['visibility'],
+        isPublic: json['is_public'] as bool? ?? json['isPublic'] as bool?,
+      ),
       likes: (json['likes'] as num?)?.toInt() ?? 0,
       createdAt: json['created_at'] != null
           ? DateTime.tryParse(json['created_at'].toString()) ?? DateTime.now()
@@ -123,6 +132,7 @@ class Trip {
       'pois': pois.map((p) => p.toJson()).toList(),
       'weather': weather.map((w) => w.toJson()).toList(),
       'is_public': isPublic,
+      'visibility': visibility.value,
       'likes': likes,
       'created_at': createdAt.toIso8601String(),
       if (completedAt != null) 'completed_at': completedAt!.toIso8601String(),

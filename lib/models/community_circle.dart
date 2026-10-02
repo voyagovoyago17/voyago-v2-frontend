@@ -47,6 +47,9 @@ class CommunityCircle {
   final int tripsCount;
   final int postsCount;
   final bool isPublic;
+
+  /// Code d'invitation d'un cercle privé (renvoyé au créateur et aux admins uniquement)
+  final String? inviteCode;
   final List<String> tags;
   final bool isMember;
   final String? myRole;
@@ -69,6 +72,7 @@ class CommunityCircle {
     this.tripsCount = 0,
     this.postsCount = 0,
     this.isPublic = true,
+    this.inviteCode,
     this.tags = const [],
     this.isMember = false,
     this.myRole,
@@ -108,6 +112,7 @@ class CommunityCircle {
       tripsCount: (json['trips_count'] as num?)?.toInt() ?? 0,
       postsCount: (json['posts_count'] as num?)?.toInt() ?? 0,
       isPublic: json['is_public'] as bool? ?? true,
+      inviteCode: json['invite_code']?.toString(),
       tags: parseTags(json['tags']),
       isMember: json['is_member'] as bool? ?? false,
       myRole: json['my_role']?.toString(),
@@ -125,6 +130,7 @@ class CommunityCircle {
     int? tripsCount,
     int? postsCount,
     String? myRole,
+    String? inviteCode,
   }) {
     return CommunityCircle(
       id: id,
@@ -141,6 +147,7 @@ class CommunityCircle {
       tripsCount: tripsCount ?? this.tripsCount,
       postsCount: postsCount ?? this.postsCount,
       isPublic: isPublic,
+      inviteCode: inviteCode ?? this.inviteCode,
       tags: tags,
       isMember: isMember ?? this.isMember,
       myRole: myRole ?? this.myRole,

@@ -3,6 +3,7 @@ import '../api/api.dart';
 import '../models/community_circle.dart';
 import '../models/community_post.dart';
 import 'auth_provider.dart';
+import 'trips_provider.dart';
 
 final communityApiProvider = Provider<CommunityApi>((ref) => CommunityApi());
 
@@ -85,6 +86,7 @@ class CommunityController {
     String? destinationCity,
     String? destinationCountry,
     List<String>? tags,
+    bool isPublic = true,
   }) async {
     final circle = await _api.createCircle(
       name: name,
@@ -95,9 +97,25 @@ class CommunityController {
       destinationCity: destinationCity,
       destinationCountry: destinationCountry,
       tags: tags,
+      isPublic: isPublic,
     );
     _ref.invalidate(communityCirclesProvider);
     return circle;
+  }
+
+  /// Rejoint un cercle via son code d'invitation et renvoie l'identifiant du cercle.
+  Future<String> joinCircleByCode(String code) async {
+    final res = await _api.joinCircleByCode(code);
+    final circleId = res['circle_id']?.toString() ?? '';
+    _ref.invalidate(communityCirclesProvider);
+    if (circleId.isNotEmpty) _ref.invalidate(circleDetailProvider(circleId));
+    return circleId;
+  }
+
+  Future<String> regenerateInviteCode(String circleId) async {
+    final code = await _api.regenerateInviteCode(circleId);
+    _ref.invalidate(circleDetailProvider(circleId));
+    return code;
   }
 
   Future<void> shareTripToCircle({
@@ -114,6 +132,8 @@ class CommunityController {
     _ref.invalidate(circleDetailProvider(circleId));
     _ref.invalidate(communityCirclesProvider);
     _ref.invalidate(communityFeedProvider);
+    // Le partage peut élargir la visibilité du voyage
+    _ref.invalidate(tripsProvider);
   }
 
   Future<CommunityPost> createPost({

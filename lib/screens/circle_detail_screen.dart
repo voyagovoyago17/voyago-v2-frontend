@@ -1,8 +1,11 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:share_plus/share_plus.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
+import '../api/api_exceptions.dart';
 import '../models/community_circle.dart';
 import '../models/community_post.dart';
 import '../models/trip.dart';
@@ -317,6 +320,15 @@ class _CircleDetailScreenState extends ConsumerState<CircleDetailScreen> {
                               fontWeight: FontWeight.w600,
                             ),
                           ),
+                          if (!circle.isPublic) ...[
+                            const SizedBox(width: 12),
+                            const Icon(Icons.lock_outline, size: 15, color: VoyagoColors.muted),
+                            const SizedBox(width: 4),
+                            const Text(
+                              'Cercle privé',
+                              style: TextStyle(color: VoyagoColors.muted, fontSize: 13, fontWeight: FontWeight.w600),
+                            ),
+                          ],
                         ],
                       ),
 
@@ -397,6 +409,12 @@ class _CircleDetailScreenState extends ConsumerState<CircleDetailScreen> {
                             ],
                           ),
                         ),
+                        const SizedBox(height: 14),
+                      ],
+
+                      // Code d'invitation (créateur / admins d'un cercle privé)
+                      if (circle.inviteCode != null) ...[
+                        _InviteCodeCard(circle: circle),
                         const SizedBox(height: 14),
                       ],
 
@@ -803,7 +821,9 @@ class _CircleDetailScreenState extends ConsumerState<CircleDetailScreen> {
               const Text('😕', style: TextStyle(fontSize: 48)),
               const SizedBox(height: 16),
               Text(
-                'Impossible de charger ce cercle\n$err',
+                err is ApiException && err.statusCode == 404
+                    ? "Ce cercle est privé ou n'existe plus.\nDemande un code d'invitation à son créateur."
+                    : 'Impossible de charger ce cercle\n$err',
                 textAlign: TextAlign.center,
                 style: const TextStyle(color: VoyagoColors.muted),
               ),
@@ -815,6 +835,124 @@ class _CircleDetailScreenState extends ConsumerState<CircleDetailScreen> {
             ],
           ),
         ),
+      ),
+    );
+  }
+}
+
+class _InviteCodeCard extends ConsumerStatefulWidget {
+  final CommunityCircle circle;
+
+  const _InviteCodeCard({required this.circle});
+
+  @override
+  ConsumerState<_InviteCodeCard> createState() => _InviteCodeCardState();
+}
+
+class _InviteCodeCardState extends ConsumerState<_InviteCodeCard> {
+  bool _regenerating = false;
+
+  String get _code => widget.circle.inviteCode ?? '';
+
+  Future<void> _copy() async {
+    await Clipboard.setData(ClipboardData(text: _code));
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text("Code d'invitation copié")),
+    );
+  }
+
+  Future<void> _share() async {
+    await SharePlus.instance.share(ShareParams(
+      text: 'Rejoins ma tribu "${widget.circle.name}" sur Voyagooo 🦜\n'
+          "Communauté → 🔑 Rejoindre avec un code : $_code",
+    ));
+  }
+
+  Future<void> _regenerate() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: VoyagoColors.surface,
+        title: const Text('Nouveau code ?', style: TextStyle(color: VoyagoColors.text)),
+        content: const Text(
+          "L'ancien code ne fonctionnera plus. Les membres actuels restent dans le cercle.",
+          style: TextStyle(color: VoyagoColors.muted),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.of(ctx).pop(false), child: const Text('Annuler')),
+          TextButton(onPressed: () => Navigator.of(ctx).pop(true), child: const Text('Générer')),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+    setState(() => _regenerating = true);
+    try {
+      await ref.read(communityControllerProvider).regenerateInviteCode(widget.circle.id);
+    } on ApiException catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(backgroundColor: VoyagoColors.coral, content: Text(e.message)),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _regenerating = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.fromLTRB(14, 12, 6, 12),
+      decoration: BoxDecoration(
+        color: VoyagoColors.surface,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: VoyagoColors.cardBorder),
+      ),
+      child: Row(
+        children: [
+          const Icon(Icons.vpn_key_outlined, color: VoyagoColors.yellow, size: 20),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text("Code d'invitation", style: TextStyle(color: VoyagoColors.muted, fontSize: 12)),
+                const SizedBox(height: 2),
+                SelectableText(
+                  _code,
+                  style: const TextStyle(
+                    color: VoyagoColors.text,
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                    letterSpacing: 3,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          IconButton(
+            tooltip: 'Copier',
+            onPressed: _copy,
+            icon: const Icon(Icons.copy_rounded, color: VoyagoColors.muted, size: 20),
+          ),
+          IconButton(
+            tooltip: 'Partager',
+            onPressed: _share,
+            icon: const Icon(Icons.ios_share_rounded, color: VoyagoColors.muted, size: 20),
+          ),
+          IconButton(
+            tooltip: 'Nouveau code',
+            onPressed: _regenerating ? null : _regenerate,
+            icon: _regenerating
+                ? const SizedBox(
+                    width: 18,
+                    height: 18,
+                    child: CircularProgressIndicator(strokeWidth: 2, color: VoyagoColors.muted),
+                  )
+                : const Icon(Icons.refresh_rounded, color: VoyagoColors.muted, size: 20),
+          ),
+        ],
       ),
     );
   }

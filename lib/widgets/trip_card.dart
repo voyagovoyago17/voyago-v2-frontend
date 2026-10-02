@@ -9,11 +9,15 @@ class TripCard extends StatelessWidget {
   final VoidCallback? onTap;
   final Map<String, dynamic>? authorInfo;
 
+  /// Si fourni (voyages de l'auteur), affiche la visibilité et permet de la changer.
+  final VoidCallback? onVisibilityTap;
+
   const TripCard({
     super.key,
     required this.trip,
     this.onTap,
     this.authorInfo,
+    this.onVisibilityTap,
   });
 
   String _formatDate(DateTime dt) {
@@ -100,6 +104,11 @@ class TripCard extends StatelessWidget {
                         _paceEmoji(trip.pace),
                         style: const TextStyle(fontSize: 13),
                       ),
+                      const Spacer(),
+                      if (onVisibilityTap != null)
+                        _VisibilityChip(visibility: trip.visibility, onTap: onVisibilityTap)
+                      else if (trip.visibility == TripVisibility.tribe)
+                        const _VisibilityChip(visibility: TripVisibility.tribe),
                     ],
                   ),
 
@@ -174,6 +183,45 @@ class TripCard extends StatelessWidget {
       default:
         return pace;
     }
+  }
+}
+
+class _VisibilityChip extends StatelessWidget {
+  final TripVisibility visibility;
+  final VoidCallback? onTap;
+
+  const _VisibilityChip({required this.visibility, this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    final color = visibility == TripVisibility.private ? VoyagoColors.muted : VoyagoColors.blue;
+    return GestureDetector(
+      onTap: onTap,
+      behavior: HitTestBehavior.opaque,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+        decoration: BoxDecoration(
+          color: color.withValues(alpha: 0.12),
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(color: color.withValues(alpha: 0.4)),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(visibility.icon, size: 13, color: color),
+            const SizedBox(width: 4),
+            Text(
+              visibility.label,
+              style: TextStyle(color: color, fontSize: 11, fontWeight: FontWeight.bold),
+            ),
+            if (onTap != null) ...[
+              const SizedBox(width: 2),
+              Icon(Icons.expand_more, size: 14, color: color),
+            ],
+          ],
+        ),
+      ),
+    );
   }
 }
 

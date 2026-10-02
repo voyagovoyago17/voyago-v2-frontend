@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import '../api/api_exceptions.dart';
 import '../models/community_circle.dart';
 import '../providers/community_provider.dart';
 import '../providers/auth_provider.dart';
@@ -92,6 +93,66 @@ class _CommunityScreenState extends ConsumerState<CommunityScreen>
       }
     } finally {
       if (mounted) setState(() => _joiningCircleIds.remove(circle.id));
+    }
+  }
+
+  /// Rejoindre un cercle privé avec le code partagé par son créateur.
+  Future<void> _showJoinByCodeDialog() async {
+    if (ref.read(currentUserProvider) == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          backgroundColor: VoyagoColors.orange,
+          content: Text('Veuillez vous connecter pour rejoindre un cercle'),
+        ),
+      );
+      return;
+    }
+
+    final codeController = TextEditingController();
+    final code = await showDialog<String>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: VoyagoColors.surface,
+        title: const Text('Rejoindre un cercle privé', style: TextStyle(color: VoyagoColors.text)),
+        content: TextField(
+          controller: codeController,
+          autofocus: true,
+          textCapitalization: TextCapitalization.characters,
+          style: const TextStyle(color: VoyagoColors.text, letterSpacing: 2),
+          decoration: const InputDecoration(hintText: "Code d'invitation"),
+          onSubmitted: (v) => Navigator.of(ctx).pop(v),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(),
+            child: const Text('Annuler', style: TextStyle(color: VoyagoColors.muted)),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.of(ctx).pop(codeController.text),
+            style: ElevatedButton.styleFrom(backgroundColor: VoyagoColors.primary),
+            child: const Text('Rejoindre', style: TextStyle(color: Colors.white)),
+          ),
+        ],
+      ),
+    );
+    codeController.dispose();
+    if (code == null || code.trim().isEmpty || !mounted) return;
+
+    try {
+      final circleId = await ref.read(communityControllerProvider).joinCircleByCode(code);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          backgroundColor: VoyagoColors.primary,
+          content: Text('🎉 Bienvenue dans ta nouvelle tribu !'),
+        ),
+      );
+      if (circleId.isNotEmpty) context.go('/circle/$circleId');
+    } on ApiException catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(backgroundColor: VoyagoColors.coral, content: Text(e.message)),
+      );
     }
   }
 
@@ -233,7 +294,13 @@ class _CommunityScreenState extends ConsumerState<CommunityScreen>
                       ),
                     ),
                   ),
-                  const SizedBox(width: 10),
+                  const SizedBox(width: 6),
+                  IconButton(
+                    tooltip: 'Rejoindre avec un code',
+                    onPressed: _showJoinByCodeDialog,
+                    icon: const Icon(Icons.vpn_key_outlined, color: VoyagoColors.primary),
+                  ),
+                  const SizedBox(width: 2),
                   ElevatedButton.icon(
                     onPressed: () => CreateCircleModal.show(context),
                     icon: const Icon(Icons.add, size: 16),

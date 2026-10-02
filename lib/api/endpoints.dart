@@ -27,12 +27,15 @@ class Endpoints {
   static const String generateTrip = '/api/trips/generate';
   static String userTrips(String userId) => '/api/trips/$userId';
   static String tripDetail(String tripId) => '/api/trip/$tripId';
+  static String tripVisibility(String tripId) => '/api/trip/$tripId/visibility';
 
   // --- COMMUNITY MODULE ---
   static const String publicFeed = '/api/community/feed';
   static String likeTrip(String tripId) => '/api/community/trip/$tripId/like';
   static const String communityCircles = '/api/community/circles';
   static String circleDetail(String circleId) => '/api/community/circles/$circleId';
+  static const String joinCircleByCode = '/api/community/circles/join-by-code';
+  static String circleInviteCode(String circleId) => '/api/community/circles/$circleId/invite-code';
   static String joinCircle(String circleId) => '/api/community/circles/$circleId/join';
   static String leaveCircle(String circleId) => '/api/community/circles/$circleId/leave';
   static String circlePosts(String circleId) => '/api/community/circles/$circleId/posts';

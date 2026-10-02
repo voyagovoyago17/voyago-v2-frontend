@@ -170,6 +170,10 @@ class CircleCard extends StatelessWidget {
                   Row(
                     crossAxisAlignment: CrossAxisAlignment.center,
                     children: [
+                      if (!circle.isPublic) ...[
+                        const Icon(Icons.lock_outline, size: 16, color: VoyagoColors.muted),
+                        const SizedBox(width: 4),
+                      ],
                       Expanded(
                         child: Text(
                           circle.name,

@@ -16,6 +16,7 @@ import '../services/api_service.dart';
 import '../services/storage_service.dart';
 import '../theme.dart';
 import '../widgets/trip_card.dart';
+import '../widgets/trip_visibility_sheet.dart';
 
 /// Palette de couleurs et styles inspirés de l'univers Explorer Gold & Obsidian
 class _ProfileColors {
@@ -2064,6 +2065,15 @@ class _ProfileContentState extends ConsumerState<_ProfileContent> {
     );
   }
 
+  Future<void> _changeTripVisibility(Trip trip) async {
+    final visibility = await showTripVisibilitySheet(context, trip: trip);
+    if (visibility == null || !mounted) return;
+    ref.invalidate(tripsProvider(widget.userId));
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('Visibilité de ${trip.destination} : ${visibility.label}')),
+    );
+  }
+
   // --- SECTION MES VOYAGES ---
   Widget _buildTripsSection(AsyncValue<List<Trip>> tripsAsync) {
     return Column(
@@ -2154,6 +2164,7 @@ class _ProfileContentState extends ConsumerState<_ProfileContent> {
                   .map((t) => TripCard(
                         trip: t,
                         onTap: () => context.go('/itinerary/${t.id}', extra: t),
+                        onVisibilityTap: () => _changeTripVisibility(t),
                       ))
                   .toList(),
             );

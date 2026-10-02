@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:emoji_picker_flutter/emoji_picker_flutter.dart' as ep;
 import 'package:animated_emoji/animated_emoji.dart';
@@ -33,6 +34,7 @@ class _CreateCircleModalState extends ConsumerState<CreateCircleModal> {
   String _selectedEmoji = '🧭';
   String _selectedCategory = 'adventure';
   bool _isLoading = false;
+  bool _isPublic = true;
   bool _showEmojiPicker = false;
   int _emojiPanelTab = 0; // 0 = Animés, 1 = Clavier complet
 
@@ -171,7 +173,7 @@ class _CreateCircleModalState extends ConsumerState<CreateCircleModal> {
       final coverUrl = _defaultCovers[_selectedCategory] ?? _defaultCovers['adventure']!;
       final controller = ref.read(communityControllerProvider);
 
-      await controller.createCircle(
+      final circle = await controller.createCircle(
         name: _nameController.text.trim(),
         description: _descriptionController.text.trim(),
         avatarEmoji: _selectedEmoji,
@@ -184,17 +186,30 @@ class _CreateCircleModalState extends ConsumerState<CreateCircleModal> {
           if (_selectedCity.isNotEmpty) _selectedCity.trim().toLowerCase(),
           if (_selectedCountry.isNotEmpty) _selectedCountry.trim().toLowerCase(),
         ],
+        isPublic: _isPublic,
       );
 
       if (mounted) {
+        final inviteCode = circle.inviteCode;
+        final messenger = ScaffoldMessenger.of(context);
         Navigator.of(context).pop();
-        ScaffoldMessenger.of(context).showSnackBar(
+        messenger.showSnackBar(
           SnackBar(
             backgroundColor: VoyagoColors.primary,
+            duration: Duration(seconds: inviteCode != null ? 8 : 4),
             content: Text(
-              '🎉 Cercle "${_nameController.text.trim()}" créé avec succès !',
+              inviteCode != null
+                  ? '🔒 Cercle privé "${circle.name}" créé ! Code d\'invitation : $inviteCode'
+                  : '🎉 Cercle "${circle.name}" créé avec succès !',
               style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.white),
             ),
+            action: inviteCode != null
+                ? SnackBarAction(
+                    label: 'Copier',
+                    textColor: Colors.white,
+                    onPressed: () => Clipboard.setData(ClipboardData(text: inviteCode)),
+                  )
+                : null,
           ),
         );
       }
@@ -210,6 +225,40 @@ class _CreateCircleModalState extends ConsumerState<CreateCircleModal> {
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
+  }
+
+  Widget _privacyOption({
+    required bool isPublic,
+    required IconData icon,
+    required String title,
+    required String subtitle,
+  }) {
+    final selected = _isPublic == isPublic;
+    return InkWell(
+      borderRadius: BorderRadius.circular(14),
+      onTap: () => setState(() => _isPublic = isPublic),
+      child: Container(
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: selected ? VoyagoColors.primary.withValues(alpha: 0.12) : VoyagoColors.background,
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(
+            color: selected ? VoyagoColors.primary : VoyagoColors.cardBorder,
+            width: selected ? 2 : 1,
+          ),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Icon(icon, color: selected ? VoyagoColors.primary : VoyagoColors.muted),
+            const SizedBox(height: 6),
+            Text(title, style: const TextStyle(color: VoyagoColors.text, fontWeight: FontWeight.bold)),
+            const SizedBox(height: 2),
+            Text(subtitle, style: const TextStyle(color: VoyagoColors.muted, fontSize: 11)),
+          ],
+        ),
+      ),
+    );
   }
 
   @override
@@ -678,6 +727,36 @@ class _CreateCircleModalState extends ConsumerState<CreateCircleModal> {
                         ),
                       ),
                     ],
+
+                    const SizedBox(height: 16),
+
+                    // Confidentialité
+                    const Text(
+                      'Confidentialité',
+                      style: TextStyle(color: VoyagoColors.text, fontWeight: FontWeight.bold, fontSize: 14),
+                    ),
+                    const SizedBox(height: 8),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: _privacyOption(
+                            isPublic: true,
+                            icon: Icons.public,
+                            title: 'Public',
+                            subtitle: 'Visible par tous, chacun peut rejoindre',
+                          ),
+                        ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: _privacyOption(
+                            isPublic: false,
+                            icon: Icons.lock_outline,
+                            title: 'Privé',
+                            subtitle: 'Sur invitation, avec un code',
+                          ),
+                        ),
+                      ],
+                    ),
 
                     const SizedBox(height: 24),
 

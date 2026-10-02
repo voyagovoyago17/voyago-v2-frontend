@@ -50,6 +50,16 @@ class TripsApi {
     return [];
   }
 
+  /// Rendre un voyage privé, visible par sa tribu ou public (auteur uniquement)
+  Future<TripVisibility> updateVisibility(String tripId, TripVisibility visibility) async {
+    final data = await _client.patch(
+      Endpoints.tripVisibility(tripId),
+      data: {'visibility': visibility.value},
+    );
+    final json = data is Map<String, dynamic> ? data : const <String, dynamic>{};
+    return TripVisibility.fromJson(json['visibility'], isPublic: json['is_public'] as bool?);
+  }
+
   /// Récupération du détail d'un voyage
   Future<Trip> getTripById(String tripId) async {
     final data = await _client.get(Endpoints.tripDetail(tripId));

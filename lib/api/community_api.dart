@@ -157,6 +157,21 @@ class CommunityApi {
     return data as Map<String, dynamic>;
   }
 
+  /// Rejoindre un cercle privé grâce à son code d'invitation (renvoie circle_id, slug, name)
+  Future<Map<String, dynamic>> joinCircleByCode(String code) async {
+    final data = await _client.post(
+      Endpoints.joinCircleByCode,
+      data: {'code': code.trim()},
+    );
+    return data as Map<String, dynamic>;
+  }
+
+  /// Générer un nouveau code d'invitation (l'ancien cesse de fonctionner)
+  Future<String> regenerateInviteCode(String circleId) async {
+    final data = await _client.post(Endpoints.circleInviteCode(circleId));
+    return (data as Map<String, dynamic>)['invite_code']?.toString() ?? '';
+  }
+
   /// Quitter un cercle
   Future<Map<String, dynamic>> leaveCircle(String circleId) async {
     final data = await _client.post(Endpoints.leaveCircle(circleId));
