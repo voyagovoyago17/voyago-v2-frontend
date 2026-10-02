@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import '../api/api.dart';
 import '../core/utils/form_validators.dart';
 import '../providers/auth_provider.dart';
+import 'email_verification_sheet.dart';
 import '../theme.dart';
 
 class AuthBottomSheet extends ConsumerStatefulWidget {
@@ -209,6 +210,10 @@ class _AuthBottomSheetState extends ConsumerState<AuthBottomSheet>
                 : _signupPseudoCtrl.text.trim(),
             avatarEmoji: _selectedEmoji,
           );
+      if (mounted) {
+        // Le code vient d'être envoyé par le serveur : on propose de le saisir tout de suite
+        await showEmailVerificationSheet(context, codeAlreadySent: true);
+      }
       if (mounted) {
         Navigator.of(context).pop(true);
         final user = ref.read(currentUserProvider);

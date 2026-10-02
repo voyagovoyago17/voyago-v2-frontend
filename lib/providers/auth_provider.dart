@@ -80,6 +80,8 @@ class AuthNotifier extends StateNotifier<AuthState> {
           sessionLoaded: true,
           isLoading: false,
         );
+        // Rafraîchit le compte en arrière-plan (ex. statut « e-mail vérifié »)
+        refreshMe();
         return;
       }
 
@@ -98,6 +100,24 @@ class AuthNotifier extends StateNotifier<AuthState> {
         error: e.toString(),
       );
     }
+  }
+
+  /// Recharge le compte depuis le serveur, sans bloquer ni afficher d'erreur
+  Future<void> refreshMe() async {
+    try {
+      final user = await _authApi.getMe();
+      if (state.isLoggedIn) state = state.copyWith(user: user);
+    } catch (_) {}
+  }
+
+  /// Envoie le code de vérification de l'adresse e-mail
+  Future<Map<String, dynamic>> sendEmailVerification() => _authApi.sendEmailVerification();
+
+  /// Confirme l'adresse e-mail ; renvoie l'XP gagnée
+  Future<int> confirmEmailVerification(String code) async {
+    final res = await _authApi.confirmEmailVerification(code);
+    state = state.copyWith(user: res.user);
+    return res.xpAwarded;
   }
 
   /// Connexion Email

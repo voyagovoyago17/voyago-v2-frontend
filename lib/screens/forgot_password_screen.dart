@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -5,6 +6,7 @@ import '../api/api.dart';
 import '../core/utils/form_validators.dart';
 import '../providers/auth_provider.dart';
 import '../theme.dart';
+import '../widgets/otp_code_field.dart';
 
 class ForgotPasswordScreen extends ConsumerStatefulWidget {
   const ForgotPasswordScreen({super.key});
@@ -16,20 +18,35 @@ class ForgotPasswordScreen extends ConsumerStatefulWidget {
 
 class _ForgotPasswordScreenState extends ConsumerState<ForgotPasswordScreen> {
   final _emailCtrl = TextEditingController();
-  final _codeCtrl = TextEditingController();
   final _newPasswordCtrl = TextEditingController();
+  final _confirmPasswordCtrl = TextEditingController();
+  final _otpKey = GlobalKey<OtpCodeFieldState>();
+  String _code = '';
   bool _isLoading = false;
   String? _error;
   String? _success;
   int _step = 1; // 1 = email, 2 = code + new password
   bool _obscurePassword = true;
+  int _cooldown = 0;
+  Timer? _cooldownTimer;
 
   @override
   void dispose() {
+    _cooldownTimer?.cancel();
     _emailCtrl.dispose();
-    _codeCtrl.dispose();
     _newPasswordCtrl.dispose();
+    _confirmPasswordCtrl.dispose();
     super.dispose();
+  }
+
+  void _startCooldown(int seconds) {
+    _cooldownTimer?.cancel();
+    setState(() => _cooldown = seconds);
+    _cooldownTimer = Timer.periodic(const Duration(seconds: 1), (t) {
+      if (!mounted) return t.cancel();
+      setState(() => _cooldown = (_cooldown - 1).clamp(0, 999));
+      if (_cooldown == 0) t.cancel();
+    });
   }
 
   Future<void> _sendCode() async {
@@ -43,12 +60,15 @@ class _ForgotPasswordScreenState extends ConsumerState<ForgotPasswordScreen> {
       _error = null;
     });
     try {
-      await ref.read(authProvider.notifier).forgotPassword(_emailCtrl.text.trim());
+      final res = await ref.read(authProvider.notifier).forgotPassword(_emailCtrl.text.trim());
       if (mounted) {
         setState(() {
           _step = 2;
-          _success = 'Un code de sécurité a été envoyé à ${_emailCtrl.text.trim()} 🦜';
+          _code = '';
+          _success = 'Si un compte existe pour ${_emailCtrl.text.trim()}, un code vient d\'y être envoyé 📬';
         });
+        _otpKey.currentState?.clear();
+        _startCooldown((res['cooldown_seconds'] as num?)?.toInt() ?? 60);
       }
     } on ApiException catch (e) {
       if (mounted) setState(() => _error = e.message);
@@ -60,7 +80,7 @@ class _ForgotPasswordScreenState extends ConsumerState<ForgotPasswordScreen> {
   }
 
   Future<void> _resetPassword() async {
-    final otpError = FormValidators.validateOtpCode(_codeCtrl.text);
+    final otpError = FormValidators.validateOtpCode(_code);
     if (otpError != null) {
       setState(() => _error = otpError);
       return;
@@ -70,6 +90,10 @@ class _ForgotPasswordScreenState extends ConsumerState<ForgotPasswordScreen> {
       setState(() => _error = pwdError);
       return;
     }
+    if (_newPasswordCtrl.text != _confirmPasswordCtrl.text) {
+      setState(() => _error = 'Les deux mots de passe ne correspondent pas');
+      return;
+    }
     setState(() {
       _isLoading = true;
       _error = null;
@@ -77,13 +101,13 @@ class _ForgotPasswordScreenState extends ConsumerState<ForgotPasswordScreen> {
     try {
       await ref.read(authProvider.notifier).resetPassword(
         email: _emailCtrl.text.trim(),
-        code: _codeCtrl.text.trim(),
+        code: _code,
         newPassword: _newPasswordCtrl.text,
       );
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('Mot de passe réinitialisé avec succès ! 🦜✨'),
+            content: Text('Mot de passe modifié ! Connecte-toi avec ton nouveau mot de passe 🦜'),
             backgroundColor: VoyagoColors.primary,
           ),
         );
@@ -136,7 +160,7 @@ class _ForgotPasswordScreenState extends ConsumerState<ForgotPasswordScreen> {
             Text(
               _step == 1
                   ? 'Saisissez votre email pour recevoir un code de réinitialisation'
-                  : 'Un code à 6 chiffres a été envoyé à votre adresse email',
+                  : 'Saisis le code à 6 chiffres reçu par e-mail, puis ton nouveau mot de passe',
               style: const TextStyle(color: VoyagoColors.muted, fontSize: 14),
               textAlign: TextAlign.center,
             ),
@@ -174,22 +198,30 @@ class _ForgotPasswordScreenState extends ConsumerState<ForgotPasswordScreen> {
                     : const Text('Envoyer le code'),
               ),
             ] else ...[
-              TextFormField(
-                controller: _codeCtrl,
-                decoration: const InputDecoration(
-                  labelText: 'Code à 6 chiffres',
-                  prefixIcon: Icon(Icons.dialpad, color: VoyagoColors.muted),
-                ),
-                keyboardType: TextInputType.number,
-                maxLength: 6,
-                textAlign: TextAlign.center,
-                style: const TextStyle(
-                  fontSize: 24,
-                  fontWeight: FontWeight.bold,
-                  letterSpacing: 8,
-                ),
+              OtpCodeField(
+                key: _otpKey,
+                onChanged: (v) => setState(() => _code = v),
+                onCompleted: (v) => setState(() => _code = v),
               ),
-              const SizedBox(height: 16),
+              const SizedBox(height: 8),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  TextButton(
+                    onPressed: _cooldown > 0 || _isLoading ? null : _sendCode,
+                    child: Text(_cooldown > 0 ? 'Renvoyer dans $_cooldown s' : 'Renvoyer le code'),
+                  ),
+                  TextButton(
+                    onPressed: () => setState(() {
+                      _step = 1;
+                      _error = null;
+                      _success = null;
+                    }),
+                    child: const Text("Changer d'adresse", style: TextStyle(color: VoyagoColors.muted)),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
               TextFormField(
                 controller: _newPasswordCtrl,
                 decoration: InputDecoration(
@@ -207,6 +239,23 @@ class _ForgotPasswordScreenState extends ConsumerState<ForgotPasswordScreen> {
                   ),
                 ),
                 obscureText: _obscurePassword,
+                autofillHints: const [AutofillHints.newPassword],
+              ),
+              const SizedBox(height: 16),
+              TextFormField(
+                controller: _confirmPasswordCtrl,
+                decoration: const InputDecoration(
+                  labelText: 'Confirme le mot de passe',
+                  prefixIcon: Icon(Icons.lock_reset_rounded, color: VoyagoColors.muted),
+                ),
+                obscureText: _obscurePassword,
+                autofillHints: const [AutofillHints.newPassword],
+                onFieldSubmitted: (_) => _resetPassword(),
+              ),
+              const SizedBox(height: 8),
+              const Text(
+                'Par sécurité, tu seras déconnecté de tes autres appareils.',
+                style: TextStyle(color: VoyagoColors.muted, fontSize: 12),
               ),
               const SizedBox(height: 24),
               ElevatedButton(
@@ -221,15 +270,6 @@ class _ForgotPasswordScreenState extends ConsumerState<ForgotPasswordScreen> {
                         ),
                       )
                     : const Text('Réinitialiser le mot de passe'),
-              ),
-              const SizedBox(height: 16),
-              TextButton(
-                onPressed: () => setState(() {
-                  _step = 1;
-                  _error = null;
-                  _success = null;
-                }),
-                child: const Text('Renvoyer le code'),
               ),
             ],
           ],

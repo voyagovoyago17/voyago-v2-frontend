@@ -19,6 +19,9 @@ class Endpoints {
   static const String resetPassword = '/api/auth/reset-password';
   static const String authOptions = '/api/auth/options';
   static const String updateProfile = '/api/auth/me';
+  static const String me = '/api/auth/me';
+  static const String emailVerificationSend = '/api/auth/email/verification/send';
+  static const String emailVerificationConfirm = '/api/auth/email/verification/confirm';
 
   // --- UPLOAD MODULE ---
   static const String uploadProfilePicture = '/api/upload/profile-picture';

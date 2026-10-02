@@ -164,6 +164,32 @@ class AuthApi {
     return data as Map<String, dynamic>;
   }
 
+  /// Profil à jour depuis le serveur (mis en cache)
+  Future<AuthUser> getMe() async {
+    final data = await _client.get(Endpoints.me);
+    final json = data is Map<String, dynamic> && data['user'] is Map<String, dynamic>
+        ? data['user'] as Map<String, dynamic>
+        : data as Map<String, dynamic>;
+    final user = AuthUser.fromJson(json);
+    await _storage.setAuthUser(user);
+    return user;
+  }
+
+  /// Envoie (ou renvoie) le code de vérification de l'adresse e-mail.
+  /// Réponse : sent, email, cooldown_seconds, already_verified, message
+  Future<Map<String, dynamic>> sendEmailVerification() async {
+    final data = await _client.post(Endpoints.emailVerificationSend);
+    return data as Map<String, dynamic>;
+  }
+
+  /// Confirme l'adresse avec le code reçu ; renvoie le compte à jour et l'XP gagnée
+  Future<({AuthUser user, int xpAwarded})> confirmEmailVerification(String code) async {
+    final data = await _client.post(Endpoints.emailVerificationConfirm, data: {'code': code.trim()}) as Map<String, dynamic>;
+    final user = AuthUser.fromJson(data['user'] as Map<String, dynamic>);
+    await _storage.setAuthUser(user);
+    return (user: user, xpAwarded: (data['xp_awarded'] as num?)?.toInt() ?? 0);
+  }
+
   /// Liste des pays et catalogue des emojis d'avatars
   Future<Map<String, dynamic>> getAuthOptions() async {
     final data = await _client.get(Endpoints.authOptions);

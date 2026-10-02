@@ -55,6 +55,13 @@ class AuthUser {
   final String? proTier;
   final DateTime? proExpiresAt;
 
+  /// Adresse e-mail confirmée (code reçu par e-mail, ou compte Google)
+  final bool emailVerified;
+
+  /// Compte e-mail dont l'adresse reste à confirmer
+  bool get needsEmailVerification =>
+      authProvider == 'email' && (email?.isNotEmpty ?? false) && !emailVerified;
+
   /// Abonnement Pro réellement valide (même règle que le serveur : 3 jours de grâce
   /// après l'échéance, pas d'échéance = à vie). `isPro` seul ignore l'échéance.
   bool get isProActive {
@@ -81,6 +88,7 @@ class AuthUser {
     required this.isPro,
     this.proTier,
     this.proExpiresAt,
+    this.emailVerified = false,
   });
 
   factory AuthUser.fromJson(Map<String, dynamic> json) {
@@ -113,6 +121,7 @@ class AuthUser {
           : json['proExpiresAt'] != null
               ? DateTime.tryParse(json['proExpiresAt'].toString())
               : null,
+      emailVerified: json['email_verified'] as bool? ?? json['emailVerified'] as bool? ?? false,
     );
   }
 
@@ -134,6 +143,7 @@ class AuthUser {
       'is_pro': isPro,
       if (proTier != null) 'pro_tier': proTier,
       if (proExpiresAt != null) 'pro_expires_at': proExpiresAt!.toIso8601String(),
+      'email_verified': emailVerified,
     };
   }
 
@@ -151,6 +161,7 @@ class AuthUser {
     String? city,
     bool? isPro,
     String? proTier,
+    bool? emailVerified,
   }) {
     return AuthUser(
       userId: userId,
@@ -169,6 +180,7 @@ class AuthUser {
       isPro: isPro ?? this.isPro,
       proTier: proTier ?? this.proTier,
       proExpiresAt: proExpiresAt,
+      emailVerified: emailVerified ?? this.emailVerified,
     );
   }
 

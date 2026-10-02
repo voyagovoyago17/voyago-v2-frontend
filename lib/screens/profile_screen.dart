@@ -17,6 +17,7 @@ import '../services/storage_service.dart';
 import '../theme.dart';
 import '../widgets/trip_card.dart';
 import '../widgets/trip_visibility_sheet.dart';
+import '../widgets/email_verification_sheet.dart';
 
 /// Palette de couleurs et styles inspirés de l'univers Explorer Gold & Obsidian
 class _ProfileColors {
@@ -763,6 +764,9 @@ class _ProfileContentState extends ConsumerState<_ProfileContent> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            // Incitation à vérifier l'adresse e-mail (comptes e-mail non vérifiés)
+            const EmailVerificationBanner(),
+
             // Mode Édition ou Hero Section
             if (_isEditing)
               _buildEditProfileCard(user)
@@ -1021,6 +1025,26 @@ class _ProfileContentState extends ConsumerState<_ProfileContent> {
                 Text(
                   '@${user.pseudo}',
                   style: const TextStyle(color: VoyagoColors.muted, fontSize: 13),
+                ),
+              ],
+
+              // Adresse e-mail et badge de vérification
+              if (user.email != null && user.email!.isNotEmpty) ...[
+                const SizedBox(height: 6),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Flexible(
+                      child: Text(
+                        user.email!,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(color: VoyagoColors.muted, fontSize: 13),
+                      ),
+                    ),
+                    const SizedBox(width: 6),
+                    const EmailVerifiedBadge(),
+                  ],
                 ),
               ],
 
@@ -1370,6 +1394,13 @@ class _ProfileContentState extends ConsumerState<_ProfileContent> {
         'tier': 'Tier 3',
         'emoji': '🧭',
         'description': 'Un voyageur a refait un de ses voyages.',
+      },
+      {
+        'id': 'compte_verifie',
+        'title': 'Compte Vérifié',
+        'tier': 'Tier 1',
+        'emoji': '✅',
+        'description': 'A confirmé son adresse e-mail.',
       },
       {
         'id': 'chasseur_pepites',

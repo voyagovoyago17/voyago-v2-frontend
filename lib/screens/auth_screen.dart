@@ -5,6 +5,7 @@ import 'package:intl/intl.dart';
 import '../api/api.dart';
 import '../core/utils/form_validators.dart';
 import '../providers/auth_provider.dart';
+import '../widgets/email_verification_sheet.dart';
 import '../theme.dart';
 
 class AuthScreen extends ConsumerStatefulWidget {
@@ -438,6 +439,8 @@ class _SignupTabState extends ConsumerState<_SignupTab> {
             pseudo: _pseudoCtrl.text.trim().isEmpty ? null : _pseudoCtrl.text.trim(),
             avatarEmoji: _selectedEmoji,
           );
+      // Le code vient d'être envoyé par le serveur : on propose de le saisir tout de suite
+      if (mounted) await showEmailVerificationSheet(context, codeAlreadySent: true);
       if (mounted) widget.onSuccess();
     } on ApiException catch (e) {
       if (e.statusCode == 409 || e is ConflictException) {
