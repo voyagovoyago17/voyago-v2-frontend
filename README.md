@@ -136,7 +136,7 @@ flutter build apk --dart-define=APP_ENV=local # release pointant sur le local
 flutter run --dart-define=BACKEND_URL=http://192.168.1.81:3333  # URL personnalisée (prioritaire)
 ```
 
-- Un bandeau **LOCAL** (bleu) ou **PROD** (rouge) s'affiche en haut à droite, sauf dans une release de prod.
+- Un bandeau **LOCAL** (bleu) s'affiche en haut à droite en local ; aucun bandeau en prod.
 - L'environnement et l'URL sont loggés au démarrage (`🌍 [ENV] ...`).
 - En changeant de backend entre deux lancements, la session est automatiquement réinitialisée (un compte local n'existe pas en prod).
 - Téléphone physique en local : `adb reverse tcp:3333 tcp:3333`, ou passer `useLanIpForDevice` à `true` / utiliser `BACKEND_URL`.

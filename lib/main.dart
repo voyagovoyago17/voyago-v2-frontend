@@ -1,4 +1,3 @@
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/date_symbol_data_local.dart';
@@ -42,7 +41,7 @@ class VoyagoApp extends ConsumerWidget {
   }
 }
 
-/// Bandeau indiquant l'environnement backend (LOCAL / PROD), masqué en release prod.
+/// Bandeau LOCAL affiché uniquement hors prod (aucun bandeau en prod).
 class _EnvironmentBanner extends StatelessWidget {
   const _EnvironmentBanner({required this.child});
 
@@ -50,11 +49,11 @@ class _EnvironmentBanner extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    if (kReleaseMode && AppConfig.isProduction) return child;
+    if (AppConfig.isProduction) return child;
     return Banner(
       message: AppConfig.environment.label,
       location: BannerLocation.topEnd,
-      color: AppConfig.isProduction ? Colors.red : Colors.blue,
+      color: Colors.blue,
       child: child,
     );
   }
