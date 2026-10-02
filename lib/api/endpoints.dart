@@ -28,6 +28,7 @@ class Endpoints {
   static String userTrips(String userId) => '/api/trips/$userId';
   static String tripDetail(String tripId) => '/api/trip/$tripId';
   static String tripVisibility(String tripId) => '/api/trip/$tripId/visibility';
+  static String tripRemix(String tripId) => '/api/trip/$tripId/remix';
 
   // --- COMMUNITY MODULE ---
   static const String publicFeed = '/api/community/feed';
@@ -46,6 +47,8 @@ class Endpoints {
   static const String communityComments = '/api/community/comments';
   static String communityComment(String commentId) => '/api/community/comments/$commentId';
   static const String communityReports = '/api/community/reports';
+  static const String blockedUsers = '/api/community/blocks';
+  static String blockUser(String userId) => '/api/community/users/$userId/block';
 
   // --- GAMIFICATION MODULE ---
   static String profile(String userId) => '/api/profile/$userId';

@@ -9,6 +9,7 @@ import '../../providers/auth_provider.dart';
 import '../../providers/community_provider.dart';
 import '../../theme.dart';
 import 'comments_sheet.dart';
+import 'social_actions.dart';
 
 /// Carte du fil d'actualité, façon réseau social : auteur, contenu, aperçu du voyage,
 /// puis la barre « J'aime / Commenter ».
@@ -132,7 +133,8 @@ class FeedItemCard extends ConsumerWidget {
   }
 
   Widget _buildCounters() {
-    if (item.likes == 0 && item.commentsCount == 0) return const SizedBox(height: 4);
+    final remixCount = (item.isTrip ? item.trip : item.post?.trip)?.remixCount ?? 0;
+    if (item.likes == 0 && item.commentsCount == 0 && remixCount == 0) return const SizedBox(height: 4);
     return Padding(
       padding: const EdgeInsets.fromLTRB(14, 10, 14, 8),
       child: Row(
@@ -148,6 +150,13 @@ class FeedItemCard extends ConsumerWidget {
               '${item.commentsCount} commentaire${item.commentsCount > 1 ? 's' : ''}',
               style: const TextStyle(color: VoyagoColors.muted, fontSize: 12),
             ),
+          if (remixCount > 0) ...[
+            const SizedBox(width: 10),
+            Text(
+              '🧭 refait $remixCount fois',
+              style: const TextStyle(color: VoyagoColors.muted, fontSize: 12),
+            ),
+          ],
         ],
       ),
     );
@@ -155,6 +164,9 @@ class FeedItemCard extends ConsumerWidget {
 
   Widget _buildActions(BuildContext context, WidgetRef ref) {
     final notifier = ref.read(homeFeedProvider.notifier);
+    final trip = item.isTrip ? item.trip : item.post?.trip;
+    final me = ref.watch(currentUserProvider)?.userId;
+    final canRemix = trip != null && trip.userId != me;
     return Row(
       children: [
         Expanded(
@@ -182,6 +194,15 @@ class FeedItemCard extends ConsumerWidget {
             ),
           ),
         ),
+        if (canRemix)
+          Expanded(
+            child: _ActionButton(
+              icon: Icons.repeat_rounded,
+              label: 'Refaire',
+              color: VoyagoColors.muted,
+              onTap: () => remixTrip(context, ref, trip),
+            ),
+          ),
       ],
     );
   }
@@ -216,6 +237,12 @@ class FeedItemCard extends ConsumerWidget {
                 title: const Text('Signaler', style: TextStyle(color: VoyagoColors.text)),
                 onTap: () => Navigator.of(ctx).pop('report'),
               ),
+            if (!isMine && me != null && item.authorId.isNotEmpty)
+              ListTile(
+                leading: const Icon(Icons.block, color: VoyagoColors.coral),
+                title: Text('Bloquer ${item.authorDisplayName}', style: const TextStyle(color: VoyagoColors.coral)),
+                onTap: () => Navigator.of(ctx).pop('block'),
+              ),
             if (item.isTrip && isMine)
               const ListTile(
                 leading: Icon(Icons.info_outline, color: VoyagoColors.muted),
@@ -232,6 +259,8 @@ class FeedItemCard extends ConsumerWidget {
     if (action == 'report') {
       if (!_requireLogin(context, ref, 'signaler')) return;
       await reportContent(context, ref, targetType: item.type, targetId: item.id);
+    } else if (action == 'block') {
+      await confirmBlockUser(context, ref, userId: item.authorId, name: item.authorDisplayName);
     } else if (action == 'delete' && item.post != null) {
       try {
         await ref.read(communityControllerProvider).deletePost(postId: item.id, circleId: item.post!.circleId);

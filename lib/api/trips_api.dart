@@ -60,6 +60,19 @@ class TripsApi {
     return TripVisibility.fromJson(json['visibility'], isPublic: json['is_public'] as bool?);
   }
 
+  /// « Refaire ce voyage » : copie l'itinéraire d'un autre voyageur dans mes voyages (privé)
+  Future<Trip> remixTrip(String tripId, {DateTime? startDate}) async {
+    final data = await _client.post(
+      Endpoints.tripRemix(tripId),
+      data: {
+        if (startDate != null)
+          'start_date': '${startDate.year.toString().padLeft(4, '0')}-'
+              '${startDate.month.toString().padLeft(2, '0')}-${startDate.day.toString().padLeft(2, '0')}',
+      },
+    );
+    return Trip.fromJson(data as Map<String, dynamic>);
+  }
+
   /// Récupération du détail d'un voyage
   Future<Trip> getTripById(String tripId) async {
     final data = await _client.get(Endpoints.tripDetail(tripId));

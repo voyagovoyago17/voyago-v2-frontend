@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import '../providers/auth_provider.dart';
 import '../providers/trips_provider.dart';
+import '../widgets/community/social_actions.dart';
 import '../services/api_service.dart';
 import '../theme.dart';
 import '../widgets/trip_card.dart';
@@ -70,6 +72,29 @@ class _PublicUserScreenState extends ConsumerState<PublicUserScreen> {
           },
         ),
         title: Text(_userData?['name']?.toString() ?? 'Profil'),
+        actions: [
+          if (ref.watch(currentUserProvider) != null && ref.watch(currentUserProvider)?.userId != widget.userId)
+            PopupMenuButton<String>(
+              color: VoyagoColors.surface,
+              onSelected: (_) async {
+                final blocked = await confirmBlockUser(
+                  context,
+                  ref,
+                  userId: widget.userId,
+                  name: _userData?['pseudo']?.toString() ?? _userData?['name']?.toString() ?? 'ce voyageur',
+                );
+                if (blocked && context.mounted) {
+                  context.canPop() ? context.pop() : context.go('/community');
+                }
+              },
+              itemBuilder: (_) => const [
+                PopupMenuItem(
+                  value: 'block',
+                  child: Text('Bloquer', style: TextStyle(color: VoyagoColors.coral)),
+                ),
+              ],
+            ),
+        ],
       ),
       body: _isLoading
           ? const Center(child: CircularProgressIndicator(color: VoyagoColors.primary))

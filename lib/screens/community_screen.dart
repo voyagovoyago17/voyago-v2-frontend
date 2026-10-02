@@ -9,6 +9,7 @@ import '../theme.dart';
 import '../widgets/circle_card.dart';
 import '../widgets/create_circle_modal.dart';
 import '../widgets/community/feed_item_card.dart';
+import '../widgets/community/social_actions.dart';
 
 class CommunityScreen extends ConsumerStatefulWidget {
   const CommunityScreen({super.key});
@@ -174,6 +175,11 @@ class _CommunityScreenState extends ConsumerState<CommunityScreen>
           ],
         ),
         actions: [
+          IconButton(
+            tooltip: 'Utilisateurs bloqués',
+            icon: const Icon(Icons.block_outlined),
+            onPressed: () => showBlockedUsersSheet(context),
+          ),
           IconButton(
             icon: const Icon(Icons.refresh_outlined),
             onPressed: () {

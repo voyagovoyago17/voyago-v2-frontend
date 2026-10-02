@@ -1351,6 +1351,27 @@ class _ProfileContentState extends ConsumerState<_ProfileContent> {
         'description': 'A maintenu une série de 3 jours consécutifs.',
       },
       {
+        'id': 'first_comment',
+        'title': 'Bavard',
+        'tier': 'Tier 1',
+        'emoji': '💬',
+        'description': 'A posté son premier commentaire dans la communauté.',
+      },
+      {
+        'id': 'populaire',
+        'title': 'Populaire',
+        'tier': 'Tier 2',
+        'emoji': '❤️',
+        'description': "Un de ses voyages a reçu 10 likes.",
+      },
+      {
+        'id': 'eclaireur',
+        'title': 'Éclaireur',
+        'tier': 'Tier 3',
+        'emoji': '🧭',
+        'description': 'Un voyageur a refait un de ses voyages.',
+      },
+      {
         'id': 'voyago_pro',
         'title': 'Voyagooo Pro',
         'tier': 'Tier 3',

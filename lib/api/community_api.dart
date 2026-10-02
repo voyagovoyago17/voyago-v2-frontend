@@ -238,6 +238,21 @@ class CommunityApi {
     return ((data as Map<String, dynamic>)['deleted_count'] as num?)?.toInt() ?? 1;
   }
 
+  Future<void> blockUser(String userId) async {
+    await _client.post(Endpoints.blockUser(userId));
+  }
+
+  Future<void> unblockUser(String userId) async {
+    await _client.delete(Endpoints.blockUser(userId));
+  }
+
+  /// Voyageurs que j'ai bloqués (user_id, name, pseudo, avatar_emoji, picture)
+  Future<List<Map<String, dynamic>>> getBlockedUsers() async {
+    final data = await _client.get(Endpoints.blockedUsers);
+    if (data is List) return data.cast<Map<String, dynamic>>();
+    return [];
+  }
+
   Future<void> deletePost(String postId) async {
     await _client.delete(Endpoints.communityPost(postId));
   }

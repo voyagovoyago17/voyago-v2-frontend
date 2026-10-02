@@ -185,6 +185,7 @@ class _NotificationTile extends ConsumerWidget {
       'trip_ready' => (Icons.flight_takeoff_rounded, VoyagoColors.blue),
       'review_thanks' => (Icons.star_rounded, VoyagoColors.yellow),
       'comment' => (Icons.mode_comment_rounded, VoyagoColors.primary),
+      'trip_remixed' => (Icons.explore_rounded, VoyagoColors.yellow),
       _ => (Icons.notifications_rounded, VoyagoColors.orange),
     };
     final canReview = n.isArrival && !n.isReviewed && n.lat != null && n.lng != null;
@@ -296,7 +297,7 @@ class _NotificationTile extends ConsumerWidget {
         ),
         fromArrival: true,
       );
-    } else if (n.type == 'trip_ready' && (n.tripId?.isNotEmpty ?? false)) {
+    } else if ((n.type == 'trip_ready' || n.type == 'trip_remixed') && (n.tripId?.isNotEmpty ?? false)) {
       navigator.pop();
       if (hostContext.mounted) hostContext.go('/itinerary/${n.tripId}');
     } else if (n.type == 'comment') {

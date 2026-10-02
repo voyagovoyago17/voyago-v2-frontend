@@ -7,6 +7,7 @@ import '../../models/community_comment.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/community_provider.dart';
 import '../../theme.dart';
+import 'social_actions.dart';
 
 /// Ouvre les commentaires d'un voyage (`trip`) ou d'une publication (`post`).
 /// [onCountChanged] reçoit le nouveau nombre de commentaires après un ajout ou une suppression.
@@ -216,12 +217,18 @@ class _CommentsSheetState extends ConsumerState<_CommentsSheet> {
                 title: const Text('Supprimer', style: TextStyle(color: VoyagoColors.coral)),
                 onTap: () => Navigator.of(ctx).pop('delete'),
               ),
-            if (comment.authorId != ref.read(currentUserProvider)?.userId)
+            if (comment.authorId != ref.read(currentUserProvider)?.userId) ...[
               ListTile(
                 leading: const Icon(Icons.flag_outlined, color: VoyagoColors.muted),
                 title: const Text('Signaler', style: TextStyle(color: VoyagoColors.text)),
                 onTap: () => Navigator.of(ctx).pop('report'),
               ),
+              ListTile(
+                leading: const Icon(Icons.block, color: VoyagoColors.coral),
+                title: Text('Bloquer ${comment.authorDisplayName}', style: const TextStyle(color: VoyagoColors.coral)),
+                onTap: () => Navigator.of(ctx).pop('block'),
+              ),
+            ],
           ],
         ),
       ),
@@ -234,6 +241,16 @@ class _CommentsSheetState extends ConsumerState<_CommentsSheet> {
         await _delete(comment);
       case 'report':
         await reportContent(context, ref, targetType: 'comment', targetId: comment.id);
+      case 'block':
+        final blocked = await confirmBlockUser(
+          context,
+          ref,
+          userId: comment.authorId,
+          name: comment.authorDisplayName,
+        );
+        if (blocked && mounted) {
+          await _load();
+        }
     }
   }
 

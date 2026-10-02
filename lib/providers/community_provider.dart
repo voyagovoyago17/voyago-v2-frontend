@@ -282,6 +282,24 @@ class CommunityController {
     return post;
   }
 
+  /// Bloque un voyageur : ses contenus disparaissent des fils, cercles et commentaires
+  Future<void> blockUser(String userId) async {
+    await _api.blockUser(userId);
+    _refreshAfterBlockChange();
+  }
+
+  Future<void> unblockUser(String userId) async {
+    await _api.unblockUser(userId);
+    _refreshAfterBlockChange();
+  }
+
+  void _refreshAfterBlockChange() {
+    _ref.read(homeFeedProvider.notifier).refresh();
+    _ref.invalidate(communityFeedProvider);
+    _ref.invalidate(circlePostsProvider);
+    _ref.invalidate(tripsProvider);
+  }
+
   /// Supprime une publication (auteur, créateur/admin du cercle)
   Future<void> deletePost({required String postId, required String circleId}) async {
     await _api.deletePost(postId);

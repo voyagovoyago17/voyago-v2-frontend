@@ -18,6 +18,7 @@ import 'package:emoji_picker_flutter/emoji_picker_flutter.dart' as ep;
 import 'package:animated_emoji/animated_emoji.dart';
 import '../theme.dart';
 import '../widgets/community/comments_sheet.dart';
+import '../widgets/community/social_actions.dart';
 
 class CircleDetailScreen extends ConsumerStatefulWidget {
   final String circleId;
@@ -1082,12 +1083,18 @@ class _PostCard extends ConsumerWidget {
                 title: const Text('Supprimer la publication', style: TextStyle(color: VoyagoColors.coral)),
                 onTap: () => Navigator.of(ctx).pop('delete'),
               ),
-            if (!isMine)
+            if (!isMine) ...[
               ListTile(
                 leading: const Icon(Icons.flag_outlined, color: VoyagoColors.muted),
                 title: const Text('Signaler', style: TextStyle(color: VoyagoColors.text)),
                 onTap: () => Navigator.of(ctx).pop('report'),
               ),
+              ListTile(
+                leading: const Icon(Icons.block, color: VoyagoColors.coral),
+                title: Text('Bloquer ${post.authorDisplayName}', style: const TextStyle(color: VoyagoColors.coral)),
+                onTap: () => Navigator.of(ctx).pop('block'),
+              ),
+            ],
           ],
         ),
       ),
@@ -1095,6 +1102,8 @@ class _PostCard extends ConsumerWidget {
     if (!context.mounted) return;
     if (action == 'report') {
       await reportContent(context, ref, targetType: 'post', targetId: post.id);
+    } else if (action == 'block') {
+      await confirmBlockUser(context, ref, userId: post.userId, name: post.authorDisplayName);
     } else if (action == 'delete') {
       try {
         await ref.read(communityControllerProvider).deletePost(postId: post.id, circleId: circleId);

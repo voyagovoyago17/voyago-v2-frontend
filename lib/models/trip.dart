@@ -24,6 +24,12 @@ class Trip {
   final bool isPublic;
   final TripVisibility visibility;
   final int likes;
+
+  /// Nombre de voyageurs ayant refait ce voyage
+  final int remixCount;
+
+  /// Destination du voyage d'origine si celui-ci a été refait depuis la communauté
+  final String? remixedFromDestination;
   final DateTime createdAt;
 
   /// Voyage terminé manuellement (il rejoint alors le journal).
@@ -49,6 +55,8 @@ class Trip {
     required this.isPublic,
     this.visibility = TripVisibility.private,
     required this.likes,
+    this.remixCount = 0,
+    this.remixedFromDestination,
     required this.createdAt,
     this.completedAt,
   });
@@ -104,6 +112,8 @@ class Trip {
         isPublic: json['is_public'] as bool? ?? json['isPublic'] as bool?,
       ),
       likes: (json['likes'] as num?)?.toInt() ?? 0,
+      remixCount: (json['remix_count'] as num?)?.toInt() ?? 0,
+      remixedFromDestination: (json['remixed_from'] as Map<String, dynamic>?)?['destination']?.toString(),
       createdAt: json['created_at'] != null
           ? DateTime.tryParse(json['created_at'].toString()) ?? DateTime.now()
           : json['createdAt'] != null
