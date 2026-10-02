@@ -57,7 +57,7 @@ class DioClient {
         },
         onError: (DioException error, handler) async {
           if (kDebugMode) {
-            debugPrint('❌ [DIO ERR] ${error.response?.statusCode} <- ${error.requestOptions.path}: ${error.message}');
+            debugPrint('❌ [DIO ERR] ${error.response?.statusCode} <- ${error.requestOptions.path}: ${error.message ?? error.error}');
           }
 
           // Handle 401 Session Expiration

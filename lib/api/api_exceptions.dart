@@ -102,7 +102,10 @@ class ApiException implements Exception {
         return ApiException(
           message: dioError.message?.isNotEmpty == true
               ? dioError.message!
-              : 'Une erreur inattendue est survenue.',
+              : dioError.error != null
+                  // Cause réelle (connexion coupée, réponse illisible...) plutôt qu'un message vide
+                  ? 'Une erreur inattendue est survenue (${dioError.error}).'
+                  : 'Une erreur inattendue est survenue.',
         );
     }
   }

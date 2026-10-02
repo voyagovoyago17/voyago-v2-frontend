@@ -109,34 +109,10 @@ class _CommunityScreenState extends ConsumerState<CommunityScreen>
       return;
     }
 
-    final codeController = TextEditingController();
     final code = await showDialog<String>(
       context: context,
-      builder: (ctx) => AlertDialog(
-        backgroundColor: VoyagoColors.surface,
-        title: const Text('Rejoindre un cercle privé', style: TextStyle(color: VoyagoColors.text)),
-        content: TextField(
-          controller: codeController,
-          autofocus: true,
-          textCapitalization: TextCapitalization.characters,
-          style: const TextStyle(color: VoyagoColors.text, letterSpacing: 2),
-          decoration: const InputDecoration(hintText: "Code d'invitation"),
-          onSubmitted: (v) => Navigator.of(ctx).pop(v),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(ctx).pop(),
-            child: const Text('Annuler', style: TextStyle(color: VoyagoColors.muted)),
-          ),
-          ElevatedButton(
-            onPressed: () => Navigator.of(ctx).pop(codeController.text),
-            style: ElevatedButton.styleFrom(backgroundColor: VoyagoColors.primary),
-            child: const Text('Rejoindre', style: TextStyle(color: Colors.white)),
-          ),
-        ],
-      ),
+      builder: (_) => const _JoinByCodeDialog(),
     );
-    codeController.dispose();
     if (code == null || code.trim().isEmpty || !mounted) return;
 
     try {
@@ -566,6 +542,52 @@ class _CommunityScreenState extends ConsumerState<CommunityScreen>
                 },
               ),
       ),
+    );
+  }
+}
+
+/// Saisie du code d'invitation. Le dialogue possède son contrôleur : il n'est libéré
+/// qu'une fois le dialogue entièrement fermé (animation de sortie comprise).
+class _JoinByCodeDialog extends StatefulWidget {
+  const _JoinByCodeDialog();
+
+  @override
+  State<_JoinByCodeDialog> createState() => _JoinByCodeDialogState();
+}
+
+class _JoinByCodeDialogState extends State<_JoinByCodeDialog> {
+  final _codeController = TextEditingController();
+
+  @override
+  void dispose() {
+    _codeController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      backgroundColor: VoyagoColors.surface,
+      title: const Text('Rejoindre un cercle privé', style: TextStyle(color: VoyagoColors.text)),
+      content: TextField(
+        controller: _codeController,
+        autofocus: true,
+        textCapitalization: TextCapitalization.characters,
+        style: const TextStyle(color: VoyagoColors.text, letterSpacing: 2),
+        decoration: const InputDecoration(hintText: "Code d'invitation"),
+        onSubmitted: (v) => Navigator.of(context).pop(v),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: const Text('Annuler', style: TextStyle(color: VoyagoColors.muted)),
+        ),
+        ElevatedButton(
+          onPressed: () => Navigator.of(context).pop(_codeController.text),
+          style: ElevatedButton.styleFrom(backgroundColor: VoyagoColors.primary),
+          child: const Text('Rejoindre', style: TextStyle(color: Colors.white)),
+        ),
+      ],
     );
   }
 }
