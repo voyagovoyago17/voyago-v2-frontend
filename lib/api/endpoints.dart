@@ -46,7 +46,8 @@ class Endpoints {
   static String tripDayRedo(String tripId, int day) => '/api/trip/$tripId/days/$day/redo';
   static String tripDayPlanB(String tripId, int day) => '/api/trip/$tripId/days/$day/plan-b';
   static String tripRegenerate(String tripId) => '/api/trip/$tripId/regenerate';
-  static String tripEditCreditXp(String tripId) => '/api/trip/$tripId/edit-credits/xp';
+  static String tripEditCreditShards(String tripId) => '/api/trip/$tripId/edit-credits/shards';
+  static const String myShards = '/api/me/shards';
   static String tripGems(String tripId) => '/api/trip/$tripId/gems';
   static String tripGemsStart(String tripId) => '/api/trip/$tripId/gems/start';
   static String tripGemCollect(String tripId, String gemId) => '/api/trip/$tripId/gems/$gemId/collect';

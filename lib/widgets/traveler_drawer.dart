@@ -314,8 +314,7 @@ class TravelerDrawer extends ConsumerWidget {
                             ),
                           );
                         }
-                        return Column(
-                          children: trips.map((trip) {
+                        Widget tile(Trip trip) {
                             final isCurrent = trip.id == currentTripId;
                             return Container(
                               margin: const EdgeInsets.symmetric(vertical: 2),
@@ -347,6 +346,12 @@ class TravelerDrawer extends ConsumerWidget {
                                         : null,
                                   ),
                                 ),
+                                subtitle: trip.isIdea
+                                    ? Text(
+                                        trip.cancelledAt != null ? 'Annulé · prêt à reprogrammer' : 'Sans dates · à programmer',
+                                        style: const TextStyle(color: VoyagoColors.muted, fontSize: 11),
+                                      )
+                                    : null,
                                 title: Text(
                                   trip.destination,
                                   style: TextStyle(
@@ -379,7 +384,38 @@ class TravelerDrawer extends ConsumerWidget {
                                 },
                               ),
                             );
-                          }).toList(),
+                        }
+
+                        // Voyages programmés d'un côté, idées sans dates (dont les annulés) de l'autre
+                        final dated = trips.where((t) => !t.isIdea).toList();
+                        final ideas = trips.where((t) => t.isIdea).toList();
+                        return Column(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            ...dated.map(tile),
+                            if (dated.isEmpty)
+                              const Padding(
+                                padding: EdgeInsets.fromLTRB(12, 4, 12, 8),
+                                child: Text('Aucun voyage programmé',
+                                    style: TextStyle(color: VoyagoColors.muted, fontSize: 12)),
+                              ),
+                            if (ideas.isNotEmpty) ...[
+                              const SizedBox(height: 12),
+                              Padding(
+                                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                                child: Text(
+                                  '💡 MES IDÉES DE VOYAGE',
+                                  style: TextStyle(
+                                    color: VoyagoColors.muted.withValues(alpha: 0.8),
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.w700,
+                                    letterSpacing: 1,
+                                  ),
+                                ),
+                              ),
+                              ...ideas.map(tile),
+                            ],
+                          ],
                         );
                       },
                       loading: () => const Center(

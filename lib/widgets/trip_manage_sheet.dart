@@ -11,7 +11,6 @@ import '../models/poi.dart';
 import '../models/trip.dart';
 import '../models/trip_edits.dart';
 import '../providers/auth_provider.dart';
-import '../providers/profile_provider.dart';
 import '../providers/trips_provider.dart';
 import '../services/api_service.dart' show ApiService;
 import '../theme.dart';
@@ -293,7 +292,7 @@ class _TripManageSheetState extends ConsumerState<_TripManageSheet> {
 
   Future<void> _planB() async {
     final o = _options!;
-    if (!o.isPro) return _quota('plan_b');
+    if (!o.isPro && !o.planBGift) return _quota('plan_b');
     final day = await _pickDay(title: 'Quelle journée mettre à l’abri ?', exclude: o.planBDays);
     if (day == null || !mounted) return;
     await _run(
@@ -333,7 +332,7 @@ class _TripManageSheetState extends ConsumerState<_TripManageSheet> {
       widget.onTripChanged(trip);
       _refreshLists();
       Navigator.of(context).pop();
-      _toast('🗂️ Voyage annulé : il t’attend dans tes idées');
+      _toast('🗂️ Voyage annulé : retrouve-le dans le menu ☰ › Mes idées de voyage');
     } on ApiException catch (e) {
       if (mounted) _toast(e.message, color: VoyagoColors.coral);
     } finally {
@@ -548,9 +547,11 @@ class _TripManageSheetState extends ConsumerState<_TripManageSheet> {
                   title: 'Plan B pluie',
                   subtitle: o.isPro
                       ? 'Une journée à l’abri en un geste · ne compte pas dans tes modifications'
-                      : 'Avantage Pro : musées, marchés couverts, cafés quand il pleut',
-                  locked: !o.isPro,
-                  badge: o.isPro ? null : 'PRO',
+                      : o.planBGift
+                          ? '🎁 Offert par ta pépite légendaire : une journée à l’abri en un geste'
+                          : 'Avantage Pro : musées, marchés couverts, cafés quand il pleut',
+                  locked: !o.isPro && !o.planBGift,
+                  badge: o.isPro ? null : (o.planBGift ? 'OFFERT' : 'PRO'),
                   enabled: o.canEditPlaces && !o.finished,
                   onTap: _planB,
                 ),
@@ -658,6 +659,15 @@ class _CountersCard extends StatelessWidget {
               counter(o.isPro ? '∞' : '${o.dateChanges.remaining}', 'décalage\nde dates'),
             ],
           ),
+          if (o.shardBalance != null) ...[
+            const SizedBox(height: 10),
+            Text(
+              '💎 ${o.shardBalance} Éclats · ${o.shardsPerCredit} = 1 modification'
+              '${o.shardsEarnedOnTrip > 0 ? ' · ${o.shardsEarnedOnTrip} gagnés sur ce voyage' : ''}',
+              textAlign: TextAlign.center,
+              style: const TextStyle(color: VoyagoColors.blue, fontSize: 12, fontWeight: FontWeight.w700),
+            ),
+          ],
           if (o.extraCredits > 0) ...[
             const SizedBox(height: 8),
             Text('dont ${o.extraCredits} crédit${o.extraCredits > 1 ? 's' : ''} en plus',
@@ -670,7 +680,7 @@ class _CountersCard extends StatelessWidget {
               padding: const EdgeInsets.symmetric(vertical: 4),
               child: Text(
                 o.isPro
-                    ? '+ Ajouter des modifications (${o.xpPerCredit} XP ou pack ${_euro(o.packPrice)})'
+                    ? '+ Ajouter des modifications (${o.shardsPerCredit} Éclats 💎 ou pack ${_euro(o.packPrice)})'
                     : '💎 Pro : 2 à 6 journées refaites par voyage, lieux et dates à volonté',
                 textAlign: TextAlign.center,
                 style: const TextStyle(color: VoyagoColors.primary, fontSize: 12.5, fontWeight: FontWeight.w800),
@@ -1072,7 +1082,7 @@ class _RegenerateSheetState extends State<_RegenerateSheet> {
 }
 
 // =============================================================================
-// Quota atteint : passer Pro, pack 0,99 € ou échanger des XP
+// Quota atteint : passer Pro, pack 0,99 € ou échanger des Éclats (pépites)
 // =============================================================================
 
 /// [reason] : redo | swap | date | plan_b. Renvoie les compteurs à jour si des crédits ont été ajoutés.
@@ -1102,7 +1112,7 @@ class _QuotaSheet extends ConsumerStatefulWidget {
 }
 
 class _QuotaSheetState extends ConsumerState<_QuotaSheet> {
-  String? _busy; // xp | pack
+  String? _busy; // shards | pack
   String? _message;
   Timer? _poll;
 
@@ -1138,12 +1148,11 @@ class _QuotaSheetState extends ConsumerState<_QuotaSheet> {
               ),
       };
 
-  Future<void> _spendXp() async {
-    setState(() => _busy = 'xp');
+  Future<void> _spendShards() async {
+    setState(() => _busy = 'shards');
     try {
-      final r = await ref.read(tripsApiProvider).creditWithXp(widget.tripId);
-      final userId = ref.read(currentUserProvider)?.userId;
-      if (userId != null) ref.invalidate(profileProvider(userId));
+      final r = await ref.read(tripsApiProvider).creditWithShards(widget.tripId);
+      ref.invalidate(shardWalletProvider);
       if (mounted) Navigator.of(context).pop(r.options);
     } on ApiException catch (e) {
       if (mounted) setState(() => _message = e.message);
@@ -1211,8 +1220,9 @@ class _QuotaSheetState extends ConsumerState<_QuotaSheet> {
   Widget build(BuildContext context) {
     final o = widget.options;
     final (title, body) = _headline;
-    final xp = o.xpBalance ?? 0;
-    final canXp = xp >= o.xpPerCredit;
+    final shards = o.shardBalance ?? 0;
+    final capReached = o.shardCreditsUsed >= o.shardCreditsLimit;
+    final canShards = !capReached && shards >= o.shardsPerCredit;
     return SafeArea(
       child: SingleChildScrollView(
         padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
@@ -1254,13 +1264,17 @@ class _QuotaSheetState extends ConsumerState<_QuotaSheet> {
                 onTap: _busy == null ? _buyPack : null,
               ),
               _OfferCard(
-                title: '1 modification contre ${o.xpPerCredit} XP',
-                subtitle: canXp
-                    ? 'Tu as $xp XP disponibles · ton niveau ne baisse pas'
-                    : 'Tu as $xp XP disponibles · gagne des XP en ramassant des pépites',
-                cta: 'Échanger',
-                loading: _busy == 'xp',
-                onTap: canXp && _busy == null ? _spendXp : null,
+                title: '1 modification contre ${o.shardsPerCredit} Éclats 💎',
+                subtitle: capReached
+                    ? 'Échange déjà utilisé sur ce voyage (${o.shardCreditsLimit} par voyage${o.isPro ? '' : ' en gratuit, 3 avec Pro'})'
+                    : canShards
+                        ? 'Tu as $shards Éclats · tes XP et ton niveau ne bougent pas'
+                        : 'Tu as $shards Éclats · il t’en manque ${o.shardsPerCredit - shards} : '
+                            'ramasse des pépites sur la carte pendant ton voyage',
+                progress: capReached ? null : (shards / o.shardsPerCredit).clamp(0.0, 1.0),
+                cta: canShards ? 'Échanger' : 'Pas encore assez',
+                loading: _busy == 'shards',
+                onTap: canShards && _busy == null ? _spendShards : null,
               ),
             ],
             if (_message != null) ...[
@@ -1284,6 +1298,9 @@ class _OfferCard extends StatelessWidget {
   final bool loading;
   final String? badge;
 
+  /// Progression vers l'offre (Éclats), de 0 à 1
+  final double? progress;
+
   const _OfferCard({
     required this.title,
     required this.subtitle,
@@ -1292,6 +1309,7 @@ class _OfferCard extends StatelessWidget {
     this.highlight = false,
     this.loading = false,
     this.badge,
+    this.progress,
   });
 
   @override
@@ -1317,6 +1335,18 @@ class _OfferCard extends StatelessWidget {
           Text(title, style: const TextStyle(color: VoyagoColors.text, fontWeight: FontWeight.w800, fontSize: 14.5)),
           const SizedBox(height: 3),
           Text(subtitle, style: const TextStyle(color: VoyagoColors.muted, fontSize: 12, height: 1.3)),
+          if (progress != null) ...[
+            const SizedBox(height: 8),
+            ClipRRect(
+              borderRadius: BorderRadius.circular(4),
+              child: LinearProgressIndicator(
+                value: progress,
+                minHeight: 6,
+                backgroundColor: VoyagoColors.cardBorder,
+                color: VoyagoColors.blue,
+              ),
+            ),
+          ],
           const SizedBox(height: 10),
           SizedBox(
             width: double.infinity,
@@ -1475,7 +1505,7 @@ class _PlanBSheetState extends ConsumerState<_PlanBSheet> {
             else if (o != null && applied)
               const Text('Le plan B de cette journée est déjà appliqué ✓',
                   textAlign: TextAlign.center, style: TextStyle(color: VoyagoColors.primary, fontWeight: FontWeight.w800))
-            else if (o != null && o.isPro)
+            else if (o != null && (o.isPro || o.planBGift))
               ElevatedButton(
                 onPressed: _working ? null : _apply,
                 style: ElevatedButton.styleFrom(
@@ -1486,7 +1516,10 @@ class _PlanBSheetState extends ConsumerState<_PlanBSheet> {
                 ),
                 child: _working
                     ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2))
-                    : const Text('Basculer ma journée à l’abri', style: TextStyle(fontWeight: FontWeight.bold)),
+                    : Text(
+                        o.isPro ? 'Basculer ma journée à l’abri' : '🎁 Utiliser mon plan B offert',
+                        style: const TextStyle(fontWeight: FontWeight.bold),
+                      ),
               )
             else if (o != null)
               _OfferCard(

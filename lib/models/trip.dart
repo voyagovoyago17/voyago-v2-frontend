@@ -35,6 +35,9 @@ class Trip {
   /// Voyage terminé manuellement (il rejoint alors le journal).
   final DateTime? completedAt;
 
+  /// Voyage annulé : il redevient une idée sans dates (« Mes idées »)
+  final DateTime? cancelledAt;
+
   /// Valise : objets prêts / total (0 / 0 si pas encore préparée)
   final int packingPacked;
   final int packingTotal;
@@ -65,6 +68,7 @@ class Trip {
     this.packingPacked = 0,
     this.packingTotal = 0,
     this.completedAt,
+    this.cancelledAt,
   });
 
   factory Trip.fromJson(Map<String, dynamic> json) {
@@ -130,6 +134,7 @@ class Trip {
               ? DateTime.tryParse(json['createdAt'].toString()) ?? DateTime.now()
               : DateTime.now(),
       completedAt: DateTime.tryParse(json['completed_at']?.toString() ?? '')?.toLocal(),
+      cancelledAt: DateTime.tryParse(json['cancelled_at']?.toString() ?? '')?.toLocal(),
       packingPacked: packingItems.where((e) => e is Map && e['packed'] == true).length,
       packingTotal: packingItems.length,
     );
@@ -160,6 +165,9 @@ class Trip {
       if (completedAt != null) 'completed_at': completedAt!.toIso8601String(),
     };
   }
+
+  /// Idée de voyage : pas encore de dates (jamais programmé ou annulé)
+  bool get isIdea => (startDate == null || startDate!.isEmpty) && completedAt == null;
 
   /// Dernier jour du voyage : end_date, sinon start_date + durée. Null si non daté.
   DateTime? get lastDay {

@@ -40,6 +40,15 @@ final tripEditOptionsProvider = FutureProvider.autoDispose.family<TripEditOption
   return ref.watch(tripsApiProvider).getEditOptions(tripId);
 });
 
+/// Bourse d'Éclats (pépites ramassées)
+final shardWalletProvider = FutureProvider.autoDispose<ShardWallet?>((ref) async {
+  try {
+    return await ref.watch(tripsApiProvider).getShardWallet();
+  } catch (_) {
+    return null;
+  }
+});
+
 /// État du générateur d'itinéraires IA
 class TripGeneratorState {
   final bool isGenerating;

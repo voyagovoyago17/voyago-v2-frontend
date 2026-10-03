@@ -425,14 +425,14 @@ class _Message extends StatelessWidget {
 }
 
 /// Célébration d'une pépite ramassée : confettis et XP gagnée.
-Future<void> showGemCollected(BuildContext context, TripGem gem, int xp) {
+Future<void> showGemCollected(BuildContext context, TripGem gem, int xp, {int shards = 0, bool perfectDay = false}) {
   return showGeneralDialog(
     context: context,
     barrierDismissible: true,
     barrierLabel: 'Pépite ramassée',
     barrierColor: Colors.black54,
     transitionDuration: const Duration(milliseconds: 350),
-    pageBuilder: (_, __, ___) => _GemCollected(gem: gem, xp: xp),
+    pageBuilder: (_, __, ___) => _GemCollected(gem: gem, xp: xp, shards: shards, perfectDay: perfectDay),
     transitionBuilder: (_, a, __, child) => ScaleTransition(
       scale: CurvedAnimation(parent: a, curve: Curves.easeOutBack),
       child: FadeTransition(opacity: a, child: child),
@@ -444,7 +444,11 @@ class _GemCollected extends StatefulWidget {
   final TripGem gem;
   final int xp;
 
-  const _GemCollected({required this.gem, required this.xp});
+  /// Éclats gagnés (échangeables contre des modifications)
+  final int shards;
+  final bool perfectDay;
+
+  const _GemCollected({required this.gem, required this.xp, this.shards = 0, this.perfectDay = false});
 
   @override
   State<_GemCollected> createState() => _GemCollectedState();
@@ -491,6 +495,20 @@ class _GemCollectedState extends State<_GemCollected> {
                 const SizedBox(height: 14),
                 Text(widget.xp > 0 ? '+${widget.xp} XP' : 'Déjà ramassée',
                     style: TextStyle(color: color, fontSize: 30, fontWeight: FontWeight.bold)),
+                if (widget.shards > 0) ...[
+                  const SizedBox(height: 6),
+                  Text('+${widget.shards} Éclats 💎',
+                      style: const TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.w800)),
+                  if (widget.perfectDay)
+                    const Padding(
+                      padding: EdgeInsets.only(top: 4),
+                      child: Text('Journée parfaite : bonus inclus !',
+                          style: TextStyle(color: _muted, fontSize: 12.5)),
+                    ),
+                  const SizedBox(height: 4),
+                  const Text('Échange tes Éclats contre des modifications de voyage',
+                      textAlign: TextAlign.center, style: TextStyle(color: _muted, fontSize: 11.5)),
+                ],
               ],
             ),
           ),

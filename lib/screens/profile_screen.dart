@@ -16,6 +16,7 @@ import '../services/api_service.dart';
 import '../services/storage_service.dart';
 import '../theme.dart';
 import '../widgets/trip_card.dart';
+import '../widgets/shard_wallet_card.dart';
 import '../widgets/trip_visibility_sheet.dart';
 import '../widgets/email_verification_sheet.dart';
 
@@ -1135,6 +1136,10 @@ class _ProfileContentState extends ConsumerState<_ProfileContent> {
                 ),
               ),
 
+              const SizedBox(height: 16),
+
+              // Bourse d'Éclats (pépites ramassées → modifications de voyage)
+              const ShardWalletCard(),
               const SizedBox(height: 16),
 
               // Actions rapides

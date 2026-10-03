@@ -74,8 +74,15 @@ class TripEditOptions {
   final int extraCredits;
   final bool freeTrial;
   final List<int> planBDays;
-  final int xpPerCredit;
-  final int? xpBalance;
+  /// Éclats : solde, prix d'une modification, échanges faits / permis sur ce voyage
+  final int? shardBalance;
+  final int shardsPerCredit;
+  final int shardCreditsUsed;
+  final int shardCreditsLimit;
+  final int shardsEarnedOnTrip;
+
+  /// Pépite légendaire ramassée : plan B pluie offert (gratuit)
+  final bool planBGift;
   final double packPrice;
   final int packCredits;
 
@@ -95,8 +102,12 @@ class TripEditOptions {
     this.extraCredits = 0,
     this.freeTrial = false,
     this.planBDays = const [],
-    this.xpPerCredit = 50,
-    this.xpBalance,
+    this.shardBalance,
+    this.shardsPerCredit = 25,
+    this.shardCreditsUsed = 0,
+    this.shardCreditsLimit = 1,
+    this.shardsEarnedOnTrip = 0,
+    this.planBGift = false,
     this.packPrice = 0.99,
     this.packCredits = 3,
   });
@@ -113,6 +124,8 @@ class TripEditOptions {
   factory TripEditOptions.fromJson(Map<String, dynamic> json) {
     final redos = json['redos'] as Map? ?? const {};
     final pack = json['pack'] as Map? ?? const {};
+    final shards = json['shards'] as Map? ?? const {};
+    final shardCredits = shards['trip_credits'] as Map? ?? const {};
     return TripEditOptions(
       plan: json['plan']?.toString() ?? 'free',
       started: json['started'] == true,
@@ -129,8 +142,12 @@ class TripEditOptions {
       extraCredits: (redos['extra_credits'] as num?)?.toInt() ?? 0,
       freeTrial: redos['free_trial'] == true,
       planBDays: [for (final d in (json['plan_b_days'] as List? ?? const [])) (d as num).toInt()],
-      xpPerCredit: (json['xp_per_credit'] as num?)?.toInt() ?? 50,
-      xpBalance: (json['xp_balance'] as num?)?.toInt(),
+      shardBalance: (shards['balance'] as num?)?.toInt(),
+      shardsPerCredit: (shards['per_credit'] as num?)?.toInt() ?? 25,
+      shardCreditsUsed: (shardCredits['used'] as num?)?.toInt() ?? 0,
+      shardCreditsLimit: (shardCredits['limit'] as num?)?.toInt() ?? 1,
+      shardsEarnedOnTrip: (shards['earned_on_trip'] as num?)?.toInt() ?? 0,
+      planBGift: json['plan_b_gift'] == true,
       packPrice: (pack['price'] as num?)?.toDouble() ?? 0.99,
       packCredits: (pack['credits'] as num?)?.toInt() ?? 3,
     );
@@ -164,5 +181,33 @@ class TripEditResult {
   factory TripEditResult.fromJson(Map<String, dynamic> json) => TripEditResult(
         Trip.fromJson(Map<String, dynamic>.from(json['trip'] as Map)),
         TripEditOptions.fromJson(Map<String, dynamic>.from(json['options'] as Map)),
+      );
+}
+
+/// Bourse d'Éclats : gagnés en ramassant des pépites, jamais retirés des XP de niveau.
+class ShardWallet {
+  final int balance;
+  final int earned;
+  final int spent;
+  final int gemsCollected;
+  final int perfectDays;
+  final int perCredit;
+
+  const ShardWallet({
+    this.balance = 0,
+    this.earned = 0,
+    this.spent = 0,
+    this.gemsCollected = 0,
+    this.perfectDays = 0,
+    this.perCredit = 25,
+  });
+
+  factory ShardWallet.fromJson(Map<String, dynamic> json) => ShardWallet(
+        balance: (json['balance'] as num?)?.toInt() ?? 0,
+        earned: (json['earned'] as num?)?.toInt() ?? 0,
+        spent: (json['spent'] as num?)?.toInt() ?? 0,
+        gemsCollected: (json['gems_collected'] as num?)?.toInt() ?? 0,
+        perfectDays: (json['perfect_days'] as num?)?.toInt() ?? 0,
+        perCredit: (json['per_credit'] as num?)?.toInt() ?? 25,
       );
 }

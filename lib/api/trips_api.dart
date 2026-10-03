@@ -6,6 +6,9 @@ import '../models/trip_edits.dart';
 import 'dio_client.dart';
 import 'endpoints.dart';
 
+/// Pépite ramassée : XP (niveau) et Éclats (modifications)
+typedef GemCollectResult = ({int xp, int shards, bool perfectDay});
+
 class TripsApi {
   final DioClient _client;
 
@@ -119,10 +122,16 @@ class TripsApi {
     return TripEditResult.fromJson(Map<String, dynamic>.from(data as Map));
   }
 
-  /// Échanger des XP contre une modification en plus
-  Future<TripEditResult> creditWithXp(String tripId) async {
-    final data = await _client.post(Endpoints.tripEditCreditXp(tripId));
+  /// Échanger des Éclats (pépites ramassées) contre une modification en plus
+  Future<TripEditResult> creditWithShards(String tripId) async {
+    final data = await _client.post(Endpoints.tripEditCreditShards(tripId));
     return TripEditResult.fromJson(Map<String, dynamic>.from(data as Map));
+  }
+
+  /// Ma bourse d'Éclats
+  Future<ShardWallet> getShardWallet() async {
+    final data = await _client.get(Endpoints.myShards);
+    return ShardWallet.fromJson(Map<String, dynamic>.from(data as Map));
   }
 
   /// Valise du voyage (générée par l'IA au premier appel, quelques secondes)
@@ -226,9 +235,14 @@ class TripsApi {
   }
 
   /// Ramasse une pépite sur place ; renvoie l'XP gagnée (0 si déjà ramassée)
-  Future<int> collectGem(String tripId, String gemId, {required double lat, required double lng}) async {
+  Future<GemCollectResult> collectGem(String tripId, String gemId, {required double lat, required double lng}) async {
     final data = await _client.post(Endpoints.tripGemCollect(tripId, gemId), data: {'lat': lat, 'lng': lng});
-    return ((data as Map<String, dynamic>)['xp_awarded'] as num?)?.toInt() ?? 0;
+    final json = data as Map<String, dynamic>;
+    return (
+      xp: (json['xp_awarded'] as num?)?.toInt() ?? 0,
+      shards: (json['shards_awarded'] as num?)?.toInt() ?? 0,
+      perfectDay: json['perfect_day'] == true,
+    );
   }
 
   /// Récupération du détail d'un voyage

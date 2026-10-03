@@ -1030,13 +1030,14 @@ class _ItineraryScreenState extends ConsumerState<ItineraryScreen>
     if (pos == null || _collectingGemId != null) return;
     setState(() => _collectingGemId = gem.id);
     try {
-      final xp = await ref.read(tripsApiProvider).collectGem(trip.id, gem.id, lat: pos.latitude, lng: pos.longitude);
+      final res = await ref.read(tripsApiProvider).collectGem(trip.id, gem.id, lat: pos.latitude, lng: pos.longitude);
       HapticFeedback.mediumImpact();
       if (mounted) setState(() => _activeGemId = null);
       ref.invalidate(tripGemsProvider(trip.id));
       final userId = ref.read(currentUserProvider)?.userId;
       if (userId != null) ref.invalidate(profileProvider(userId));
-      if (mounted) await showGemCollected(context, gem, xp);
+      ref.invalidate(shardWalletProvider);
+      if (mounted) await showGemCollected(context, gem, res.xp, shards: res.shards, perfectDay: res.perfectDay);
     } catch (e) {
       _showSafeSnackBar(SnackBar(
         content: Text(e is ApiException ? e.message : 'Impossible de ramasser la pépite'),
