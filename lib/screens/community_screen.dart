@@ -142,13 +142,16 @@ class _CommunityScreenState extends ConsumerState<CommunityScreen>
           icon: const Icon(Icons.arrow_back),
           onPressed: () => context.go('/'),
         ),
-        title: const Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text('🦜', style: TextStyle(fontSize: 20)),
-            SizedBox(width: 8),
-            Text('Communauté Voyagooo'),
-          ],
+        title: const FittedBox(
+          fit: BoxFit.scaleDown,
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text('🦜', style: TextStyle(fontSize: 20)),
+              SizedBox(width: 8),
+              Text('Communauté Voyagooo'),
+            ],
+          ),
         ),
         actions: [
           IconButton(
