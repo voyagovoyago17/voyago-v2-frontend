@@ -210,8 +210,7 @@ class HomeScreen extends ConsumerWidget {
                           subtitle: user != null ? 'Mes voyages sauvegardés' : 'Se connecter',
                           badge: 'Profil',
                           color: VoyagoColors.coral,
-                          // Connecté : la photo de profil ouvre le menu (toutes les options de l'app)
-          onTap: () => user != null ? Scaffold.of(context).openDrawer() : context.go('/auth'),
+                          onTap: () => context.go(user != null ? '/profile' : '/auth'),
                         ),
                       ),
                     ],
@@ -243,7 +242,8 @@ class _HeaderSection extends ConsumerWidget {
       children: [
         // Avatar utilisateur avec anneau lumineux
         GestureDetector(
-          onTap: () => context.go(user != null ? '/profile' : '/auth'),
+          // Connecté : la photo de profil ouvre le menu (toutes les options de l'app)
+          onTap: () => user != null ? Scaffold.of(context).openDrawer() : context.go('/auth'),
           child: Container(
             width: avatarSize,
             height: avatarSize,
