@@ -51,6 +51,10 @@ class Endpoints {
   static String tripPlanJoin(String planId) => '/api/community/trip-plans/$planId/join';
   static String joinCircle(String circleId) => '/api/community/circles/$circleId/join';
   static String leaveCircle(String circleId) => '/api/community/circles/$circleId/leave';
+  static String circleJoinRequests(String circleId) => '/api/community/circles/$circleId/join-requests';
+  static String circleAccess(String circleId) => '/api/community/circles/$circleId/access';
+  static String joinRequestDecision(String requestId, String decision) =>
+      '/api/community/join-requests/$requestId/$decision';
   static String circlePosts(String circleId) => '/api/community/circles/$circleId/posts';
   static String shareTripToCircle(String circleId) => '/api/community/circles/$circleId/share-trip';
   static String likeCommunityPost(String postId) => '/api/community/posts/$postId/like';

@@ -1,5 +1,6 @@
 import '../models/trip.dart';
 import '../models/community_circle.dart';
+import '../models/circle_access.dart';
 import '../models/community_post.dart';
 import '../models/community_comment.dart';
 import '../models/feed_item.dart';
@@ -358,6 +359,45 @@ class CommunityApi {
     final data = await _client.post(Endpoints.circleInviteCode(circleId));
     return (data as Map<String, dynamic>)['invite_code']?.toString() ?? '';
   }
+
+  /// Demander à rejoindre un cercle privé (réponse : en attente, accepté, refusé...)
+  Future<JoinRequestResult> requestJoin(String circleId, {String? message}) async {
+    final data = await _client.post(
+      Endpoints.circleJoinRequests(circleId),
+      data: {if (message != null && message.trim().isNotEmpty) 'message': message.trim()},
+    );
+    return JoinRequestResult.fromJson(data as Map<String, dynamic>);
+  }
+
+  Future<void> cancelJoinRequest(String circleId) => _client.delete(Endpoints.circleJoinRequests(circleId));
+
+  /// Demandes reçues par le cercle (fondateur / admins)
+  Future<({List<JoinRequest> requests, String question})> getJoinRequests(String circleId) async {
+    final data = await _client.get(Endpoints.circleJoinRequests(circleId)) as Map<String, dynamic>;
+    final list = (data['requests'] as List? ?? [])
+        .whereType<Map>()
+        .map((e) => JoinRequest.fromJson(Map<String, dynamic>.from(e)))
+        .toList();
+    return (requests: list, question: data['join_question']?.toString() ?? '');
+  }
+
+  Future<void> decideJoinRequest(String requestId, {required bool accept}) =>
+      _client.post(Endpoints.joinRequestDecision(requestId, accept ? 'accept' : 'reject'));
+
+  /// Conditions d'accès, acceptation automatique, question d'entrée, cercle secret
+  Future<void> updateCircleAccess(
+    String circleId, {
+    required JoinRules rules,
+    required bool autoApprove,
+    required String joinQuestion,
+    bool? listed,
+  }) =>
+      _client.patch(Endpoints.circleAccess(circleId), data: {
+        'join_rules': rules.toJson(),
+        'auto_approve': autoApprove,
+        'join_question': joinQuestion.trim(),
+        if (listed != null) 'listed': listed,
+      });
 
   /// Quitter un cercle
   Future<Map<String, dynamic>> leaveCircle(String circleId) async {

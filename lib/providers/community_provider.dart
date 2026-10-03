@@ -1,6 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../api/api.dart';
 import '../models/community_circle.dart';
+import '../models/circle_access.dart';
 import '../models/community_post.dart';
 import '../models/feed_item.dart';
 import '../models/tribe.dart';
@@ -166,6 +167,12 @@ final circleDetailProvider = FutureProvider.family<CommunityCircle, String>((ref
 });
 
 /// Posts & moments d'un cercle spécifique
+/// Demandes d'adhésion d'un cercle (fondateur / admins)
+final circleJoinRequestsProvider =
+    FutureProvider.autoDispose.family<({List<JoinRequest> requests, String question}), String>((ref, circleId) {
+  return ref.watch(communityApiProvider).getJoinRequests(circleId);
+});
+
 final circlePostsProvider = FutureProvider.family<List<CommunityPost>, String>((ref, circleId) async {
   final api = ref.watch(communityApiProvider);
   return api.getCirclePosts(circleId);
@@ -239,6 +246,41 @@ class CommunityController {
     );
     _ref.invalidate(communityCirclesProvider);
     return circle;
+  }
+
+  /// Demande d'adhésion à un cercle privé
+  Future<JoinRequestResult> requestJoin(String circleId, {String? message}) async {
+    final result = await _api.requestJoin(circleId, message: message);
+    _ref.invalidate(communityCirclesProvider);
+    _ref.invalidate(circleDetailProvider(circleId));
+    if (result.status == 'joined') _ref.read(homeFeedProvider.notifier).refresh();
+    return result;
+  }
+
+  Future<void> cancelJoinRequest(String circleId) async {
+    await _api.cancelJoinRequest(circleId);
+    _ref.invalidate(communityCirclesProvider);
+    _ref.invalidate(circleDetailProvider(circleId));
+  }
+
+  Future<void> decideJoinRequest({required String circleId, required String requestId, required bool accept}) async {
+    await _api.decideJoinRequest(requestId, accept: accept);
+    _ref.invalidate(circleJoinRequestsProvider(circleId));
+    _ref.invalidate(circleDetailProvider(circleId));
+    _ref.invalidate(communityCirclesProvider);
+  }
+
+  Future<void> updateCircleAccess(
+    String circleId, {
+    required JoinRules rules,
+    required bool autoApprove,
+    required String joinQuestion,
+    bool? listed,
+  }) async {
+    await _api.updateCircleAccess(circleId,
+        rules: rules, autoApprove: autoApprove, joinQuestion: joinQuestion, listed: listed);
+    _ref.invalidate(circleDetailProvider(circleId));
+    _ref.invalidate(communityCirclesProvider);
   }
 
   /// Rejoint un cercle via son code d'invitation et renvoie l'identifiant du cercle.

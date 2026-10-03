@@ -182,6 +182,7 @@ void _showForegroundBanner(AppNotification n, {VoidCallback? onOpen}) {
     'comment' => (Icons.mode_comment_rounded, VoyagoColors.primary),
     'trip_remixed' => (Icons.explore_rounded, VoyagoColors.yellow),
     'tribe_trip' => (Icons.groups_rounded, VoyagoColors.primary),
+    'circle_request' => (Icons.lock_person_rounded, VoyagoColors.yellow),
     'review_thanks' => (Icons.star_rounded, VoyagoColors.yellow),
     _ => (Icons.notifications_active_rounded, VoyagoColors.orange),
   };

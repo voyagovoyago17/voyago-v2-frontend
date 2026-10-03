@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import '../models/community_circle.dart';
 import '../theme.dart';
+import 'community/circle_access_widgets.dart';
 
 class CircleCard extends StatelessWidget {
   final CommunityCircle circle;
@@ -192,6 +193,41 @@ class CircleCard extends StatelessWidget {
                     ],
                   ),
 
+                  // Cercle privé : accès sur demande + conditions
+                  if (circle.isLocked) ...[
+                    const SizedBox(height: 6),
+                    Row(
+                      children: [
+                        Icon(
+                          circle.hasPendingRequest ? Icons.hourglass_top_rounded : Icons.lock_rounded,
+                          size: 13,
+                          color: circle.hasPendingRequest ? VoyagoColors.yellow : VoyagoColors.muted,
+                        ),
+                        const SizedBox(width: 4),
+                        Text(
+                          circle.hasPendingRequest ? 'Demande en attente' : 'Privé · accès sur demande',
+                          style: TextStyle(
+                            color: circle.hasPendingRequest ? VoyagoColors.yellow : VoyagoColors.muted,
+                            fontSize: 11.5,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                  if (!circle.joinRules.isEmpty) ...[
+                    const SizedBox(height: 8),
+                    JoinRuleChips(rules: circle.joinRules),
+                  ],
+                  // Fondateur : demandes en attente
+                  if (circle.pendingRequestsCount > 0) ...[
+                    const SizedBox(height: 8),
+                    Text(
+                      '🔔 ${circle.pendingRequestsCount} demande${circle.pendingRequestsCount > 1 ? 's' : ''} en attente',
+                      style: const TextStyle(color: VoyagoColors.yellow, fontSize: 12, fontWeight: FontWeight.w700),
+                    ),
+                  ],
+
                   if (circle.description.isNotEmpty) ...[
                     const SizedBox(height: 8),
                     Text(
@@ -251,6 +287,10 @@ class CircleCard extends StatelessWidget {
           color: VoyagoColors.primary,
         ),
       );
+    }
+
+    if (circle.isLocked) {
+      return JoinRequestButton(circle: circle, dense: true);
     }
 
     if (circle.isMember) {

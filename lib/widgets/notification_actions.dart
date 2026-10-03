@@ -16,6 +16,8 @@ bool canOpenNotification(AppNotification n) {
       return n.data['circle_id'] != null && n.data['plan_id'] != null;
     case 'comment':
       return n.data['target_type'] != null && n.data['target_id'] != null;
+    case 'circle_request':
+      return n.data['circle_id'] != null;
     case 'system':
       return n.data['journal'] == true && (n.tripId?.isNotEmpty ?? false);
     default:
@@ -53,5 +55,7 @@ void openNotificationTarget(BuildContext context, AppNotification n) {
       );
     case 'system':
       context.push('/journal/${n.tripId}');
+    case 'circle_request':
+      context.push('/circle/${n.data['circle_id']}');
   }
 }

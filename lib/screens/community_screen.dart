@@ -7,6 +7,7 @@ import '../providers/community_provider.dart';
 import '../providers/auth_provider.dart';
 import '../theme.dart';
 import '../widgets/circle_card.dart';
+import '../widgets/community/circle_access_widgets.dart';
 import '../widgets/create_circle_modal.dart';
 import '../widgets/community/feed_item_card.dart';
 import '../widgets/community/social_actions.dart';
@@ -55,6 +56,12 @@ class _CommunityScreenState extends ConsumerState<CommunityScreen>
           content: Text('Veuillez vous connecter pour rejoindre ce cercle'),
         ),
       );
+      return;
+    }
+
+    // Cercle privé : demande d'adhésion (conditions vérifiées automatiquement)
+    if (circle.isLocked) {
+      await requestToJoinCircle(context, ref, circle);
       return;
     }
 

@@ -20,6 +20,7 @@ import '../theme.dart';
 import '../widgets/community/comments_sheet.dart';
 import '../widgets/community/social_actions.dart';
 import '../widgets/community/tribe_sections.dart';
+import '../widgets/community/circle_access_widgets.dart';
 
 class CircleDetailScreen extends ConsumerStatefulWidget {
   final String circleId;
@@ -148,12 +149,21 @@ class _CircleDetailScreenState extends ConsumerState<CircleDetailScreen> {
   @override
   Widget build(BuildContext context) {
     final circleAsync = ref.watch(circleDetailProvider(widget.circleId));
-    final postsAsync = ref.watch(circlePostsProvider(widget.circleId));
+    // Cercle privé verrouillé : son contenu n'est pas chargé
+    final isLocked = circleAsync.valueOrNull?.isLocked ?? false;
+    final AsyncValue<List<CommunityPost>> postsAsync =
+        isLocked ? const AsyncValue.data(<CommunityPost>[]) : ref.watch(circlePostsProvider(widget.circleId));
 
     return Scaffold(
       backgroundColor: VoyagoColors.background,
       body: circleAsync.when(
-        data: (circle) => RefreshIndicator(
+        data: (circle) => circle.isLocked
+            ? RefreshIndicator(
+                onRefresh: () => ref.refresh(circleDetailProvider(widget.circleId).future),
+                color: VoyagoColors.primary,
+                child: LockedCircleView(circle: circle),
+              )
+            : RefreshIndicator(
           onRefresh: () async {
             ref.invalidate(circleChallengesProvider(circle.id));
             ref.invalidate(circleTripPlansProvider(circle.id));
@@ -420,6 +430,12 @@ class _CircleDetailScreenState extends ConsumerState<CircleDetailScreen> {
                       // Code d'invitation (créateur / admins d'un cercle privé)
                       if (circle.inviteCode != null) ...[
                         _InviteCodeCard(circle: circle),
+                        const SizedBox(height: 14),
+                      ],
+
+                      // Demandes d'adhésion et conditions d'accès (fondateur / admins)
+                      if (circle.canManage) ...[
+                        CircleAccessManagerCard(circle: circle),
                         const SizedBox(height: 14),
                       ],
 

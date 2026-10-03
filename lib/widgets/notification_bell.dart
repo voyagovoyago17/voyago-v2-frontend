@@ -186,6 +186,7 @@ class _NotificationTile extends ConsumerWidget {
       'comment' => (Icons.mode_comment_rounded, VoyagoColors.primary),
       'trip_remixed' => (Icons.explore_rounded, VoyagoColors.yellow),
       'tribe_trip' => (Icons.groups_rounded, VoyagoColors.primary),
+      'circle_request' => (Icons.lock_person_rounded, VoyagoColors.yellow),
       _ => (Icons.notifications_rounded, VoyagoColors.orange),
     };
     final canReview = n.isArrival && !n.isReviewed && n.lat != null && n.lng != null;

@@ -1,3 +1,5 @@
+import 'circle_access.dart';
+
 class CommunityMemberPreview {
   final String userId;
   final String role;
@@ -57,6 +59,25 @@ class CommunityCircle {
   final List<CommunityMemberPreview> membersSample;
   final DateTime createdAt;
 
+  /// Cercle privé dont je ne suis pas membre : vitrine + demande d'adhésion
+  final bool isLocked;
+
+  /// false = cercle secret (invisible dans la liste, accès par code)
+  final bool listed;
+  final JoinRules joinRules;
+
+  /// Conditions vérifiées pour moi (✅ / ❌)
+  final List<JoinCheck> joinChecks;
+  final bool eligible;
+  final bool autoApprove;
+  final String joinQuestion;
+
+  /// 'pending' | 'rejected' | null
+  final String? myRequestStatus;
+
+  /// Demandes en attente (fondateur / admins)
+  final int pendingRequestsCount;
+
   const CommunityCircle({
     required this.id,
     required this.name,
@@ -79,7 +100,19 @@ class CommunityCircle {
     this.creator,
     this.membersSample = const [],
     required this.createdAt,
+    this.isLocked = false,
+    this.listed = true,
+    this.joinRules = const JoinRules(),
+    this.joinChecks = const [],
+    this.eligible = true,
+    this.autoApprove = false,
+    this.joinQuestion = '',
+    this.myRequestStatus,
+    this.pendingRequestsCount = 0,
   });
+
+  bool get canManage => myRole == 'creator' || myRole == 'admin';
+  bool get hasPendingRequest => myRequestStatus == 'pending';
 
   factory CommunityCircle.fromJson(Map<String, dynamic> json) {
     List<String> parseTags(dynamic raw) {
@@ -121,6 +154,15 @@ class CommunityCircle {
       createdAt: json['created_at'] != null
           ? DateTime.tryParse(json['created_at'].toString()) ?? DateTime.now()
           : DateTime.now(),
+      isLocked: json['is_locked'] == true,
+      listed: json['listed'] != false,
+      joinRules: JoinRules.fromJson(json['join_rules']),
+      joinChecks: JoinCheck.listFrom(json['join_checks']),
+      eligible: json['eligible'] != false,
+      autoApprove: json['auto_approve'] == true,
+      joinQuestion: json['join_question']?.toString() ?? '',
+      myRequestStatus: json['my_request_status']?.toString(),
+      pendingRequestsCount: (json['pending_requests_count'] as num?)?.toInt() ?? 0,
     );
   }
 
@@ -154,6 +196,15 @@ class CommunityCircle {
       creator: creator,
       membersSample: membersSample,
       createdAt: createdAt,
+      isLocked: isLocked,
+      listed: listed,
+      joinRules: joinRules,
+      joinChecks: joinChecks,
+      eligible: eligible,
+      autoApprove: autoApprove,
+      joinQuestion: joinQuestion,
+      myRequestStatus: myRequestStatus,
+      pendingRequestsCount: pendingRequestsCount,
     );
   }
 
