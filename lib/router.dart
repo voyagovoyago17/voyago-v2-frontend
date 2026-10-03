@@ -3,7 +3,6 @@ import 'package:go_router/go_router.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'providers/auth_provider.dart';
 import 'models/trip.dart';
-import 'screens/settings_screen.dart';
 import 'screens/home_screen.dart';
 import 'screens/auth_screen.dart';
 import 'screens/forgot_password_screen.dart';
@@ -144,11 +143,16 @@ final routerProvider = Provider<GoRouter>((ref) {
       ),
       GoRoute(
         path: '/profile',
-        builder: (context, state) => const ProfileScreen(),
+        builder: (context, state) => ProfileScreen(
+          initialTab: state.uri.queryParameters['tab'],
+          initialSection: state.uri.queryParameters['section'],
+        ),
       ),
+      // Les réglages vivent dans Profil › Réglages (ancien lien conservé)
       GoRoute(
         path: '/settings',
-        builder: (context, state) => SettingsScreen(initialTab: state.uri.queryParameters['tab']),
+        redirect: (context, state) =>
+            '/profile?tab=reglages&section=${state.uri.queryParameters['tab'] ?? 'notifications'}',
       ),
       GoRoute(
         path: '/community',

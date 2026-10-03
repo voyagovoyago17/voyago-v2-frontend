@@ -592,7 +592,7 @@ class _ItineraryScreenState extends ConsumerState<ItineraryScreen>
               TextButton(
                 onPressed: () {
                   Navigator.pop(ctx);
-                  context.push('/settings?tab=navigation');
+                  context.push('/profile?tab=reglages&section=navigation');
                 },
                 child: const Text('Choisir mon app par défaut et mes options (péages, ferries…)'),
               ),

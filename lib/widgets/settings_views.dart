@@ -1,60 +1,24 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:go_router/go_router.dart';
 import '../api/notifications_api.dart';
 import '../services/app_settings.dart';
 import '../services/app_sounds.dart';
 import '../services/navigation_links.dart';
 import '../theme.dart';
 
-/// Réglages : notifications (son, vibration, volume, heures calmes) et navigation (app, péages…).
-class SettingsScreen extends StatelessWidget {
-  /// Onglet ouvert au départ : « notifications » ou « navigation »
-  final String? initialTab;
-  const SettingsScreen({super.key, this.initialTab});
-
-  @override
-  Widget build(BuildContext context) {
-    return DefaultTabController(
-      length: 2,
-      initialIndex: initialTab == 'navigation' ? 1 : 0,
-      child: Scaffold(
-        backgroundColor: VoyagoColors.background,
-        appBar: AppBar(
-          leading: IconButton(
-            icon: const Icon(Icons.arrow_back),
-            onPressed: () => context.canPop() ? context.pop() : context.go('/profile'),
-          ),
-          title: const Text('Réglages'),
-          bottom: const TabBar(
-            indicatorColor: VoyagoColors.primary,
-            labelColor: VoyagoColors.text,
-            unselectedLabelColor: VoyagoColors.muted,
-            labelStyle: TextStyle(fontWeight: FontWeight.w800),
-            tabs: [
-              Tab(icon: Icon(Icons.notifications_active_rounded), text: 'Notifications'),
-              Tab(icon: Icon(Icons.navigation_rounded), text: 'Navigation'),
-            ],
-          ),
-        ),
-        body: const TabBarView(children: [_NotificationsTab(), _NavigationTab()]),
-      ),
-    );
-  }
-}
-
 // =============================================================================
 // Notifications
 // =============================================================================
 
-class _NotificationsTab extends ConsumerStatefulWidget {
-  const _NotificationsTab();
+/// Réglages des notifications : son / vibration / silencieux, volume, social, heures calmes.
+class NotificationSettingsView extends ConsumerStatefulWidget {
+  const NotificationSettingsView({super.key});
 
   @override
-  ConsumerState<_NotificationsTab> createState() => _NotificationsTabState();
+  ConsumerState<NotificationSettingsView> createState() => _NotificationSettingsViewState();
 }
 
-class _NotificationsTabState extends ConsumerState<_NotificationsTab> {
+class _NotificationSettingsViewState extends ConsumerState<NotificationSettingsView> {
   final _api = NotificationsApi();
   Map<String, dynamic>? _server;
   bool _testing = false;
@@ -219,8 +183,9 @@ class _NotificationsTabState extends ConsumerState<_NotificationsTab> {
 // Navigation
 // =============================================================================
 
-class _NavigationTab extends ConsumerWidget {
-  const _NavigationTab();
+/// Réglages de navigation : app de « Y aller », options à éviter en voiture.
+class NavigationSettingsView extends ConsumerWidget {
+  const NavigationSettingsView({super.key});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {

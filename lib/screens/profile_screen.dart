@@ -17,6 +17,7 @@ import '../services/storage_service.dart';
 import '../theme.dart';
 import '../widgets/trip_card.dart';
 import '../widgets/shard_wallet_card.dart';
+import '../widgets/settings_views.dart';
 import '../widgets/trip_visibility_sheet.dart';
 import '../widgets/email_verification_sheet.dart';
 
@@ -31,7 +32,13 @@ class _ProfileColors {
 }
 
 class ProfileScreen extends ConsumerWidget {
-  const ProfileScreen({super.key});
+  /// Onglet principal ouvert au départ : « profil » ou « reglages »
+  final String? initialTab;
+
+  /// Onglet secondaire (ex. « notifications », « navigation », « voyages »)
+  final String? initialSection;
+
+  const ProfileScreen({super.key, this.initialTab, this.initialSection});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -100,19 +107,57 @@ class ProfileScreen extends ConsumerWidget {
       );
     }
 
-    return _ProfileContent(userId: authState.user!.userId);
+    return _ProfileContent(
+      userId: authState.user!.userId,
+      initialTab: initialTab,
+      initialSection: initialSection,
+    );
   }
 }
 
 class _ProfileContent extends ConsumerStatefulWidget {
   final String userId;
-  const _ProfileContent({required this.userId});
+  final String? initialTab;
+  final String? initialSection;
+  const _ProfileContent({required this.userId, this.initialTab, this.initialSection});
 
   @override
   ConsumerState<_ProfileContent> createState() => _ProfileContentState();
 }
 
-class _ProfileContentState extends ConsumerState<_ProfileContent> {
+/// Onglets secondaires de chaque onglet principal (ajouter ici les prochaines sections)
+const _profileSections = [
+  ('apercu', 'Aperçu', Icons.person_rounded),
+  ('badges', 'Badges', Icons.emoji_events_rounded),
+  ('adn', 'ADN voyageur', Icons.insights_rounded),
+  ('voyages', 'Mes voyages', Icons.luggage_rounded),
+];
+const _settingsSections = [
+  ('notifications', 'Notifications', Icons.notifications_active_rounded),
+  ('navigation', 'Navigation', Icons.navigation_rounded),
+  ('compte', 'Compte', Icons.manage_accounts_rounded),
+];
+
+class _ProfileContentState extends ConsumerState<_ProfileContent> with TickerProviderStateMixin {
+  late final TabController _mainTabs = TabController(
+    length: 2,
+    vsync: this,
+    initialIndex: widget.initialTab == 'reglages' ||
+            _settingsSections.any((e) => e.$1 == widget.initialSection)
+        ? 1
+        : 0,
+  );
+  late final TabController _profileTabs = TabController(
+    length: _profileSections.length,
+    vsync: this,
+    initialIndex: _profileSections.indexWhere((e) => e.$1 == widget.initialSection).clamp(0, _profileSections.length - 1),
+  );
+  late final TabController _settingsTabs = TabController(
+    length: _settingsSections.length,
+    vsync: this,
+    initialIndex: _settingsSections.indexWhere((e) => e.$1 == widget.initialSection).clamp(0, _settingsSections.length - 1),
+  );
+
   List<Map<String, dynamic>> _allBadges = [];
   bool _isEditing = false;
 
@@ -152,6 +197,9 @@ class _ProfileContentState extends ConsumerState<_ProfileContent> {
 
   @override
   void dispose() {
+    _mainTabs.dispose();
+    _profileTabs.dispose();
+    _settingsTabs.dispose();
     _pseudoCtrl.dispose();
     _cityCtrl.dispose();
     _countryCtrl.dispose();
@@ -174,6 +222,9 @@ class _ProfileContentState extends ConsumerState<_ProfileContent> {
     _editAvatarEmoji = user.avatarEmoji;
     _editThermal = user.thermalSensitivity;
     _editGender = user.gender;
+    // La modification se fait dans Profil › Aperçu
+    _mainTabs.animateTo(0);
+    _profileTabs.animateTo(0);
     setState(() => _isEditing = true);
   }
 
@@ -759,96 +810,120 @@ class _ProfileContentState extends ConsumerState<_ProfileContent> {
             ),
         ],
       ),
-      body: SingleChildScrollView(
-        physics: const BouncingScrollPhysics(),
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // Incitation à vérifier l'adresse e-mail (comptes e-mail non vérifiés)
-            const EmailVerificationBanner(),
-
-            // Mode Édition ou Hero Section
-            if (_isEditing)
-              _buildEditProfileCard(user)
-            else
-              _buildHeroSection(user, profile, trips),
-
-            const SizedBox(height: 24),
-
-            // Achievement Timeline (Métriques Clés en 3 colonnes)
-            _buildAchievementTimeline(profile, trips),
-
-            const SizedBox(height: 28),
-
-            // Hall of Fame (Badges & Trophées 3D réels)
-            _buildHallOfFameSection(profile),
-
-            const SizedBox(height: 28),
-
-            // Traveler DNA (ADN du Voyageur dynamique selon les voyages réels)
-            _buildTravelerDnaSection(user, trips),
-
-            const SizedBox(height: 24),
-
-            // Upgrade Pass / Voyagooo Pro Banner
-            _buildUpgradeCard(user),
-
-            const SizedBox(height: 32),
-
-            // Section Mes Voyages
-            _buildTripsSection(tripsAsync),
-
-            const SizedBox(height: 32),
-
-            // Réglages : notifications (son, vibration, volume) et navigation (Waze, péages…)
-            Material(
-              color: VoyagoColors.surface,
-              clipBehavior: Clip.antiAlias,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(18),
-                side: const BorderSide(color: VoyagoColors.cardBorder),
-              ),
-              child: ListTile(
-                onTap: () => context.push('/settings'),
-                leading: const Icon(Icons.settings_rounded, color: VoyagoColors.primary),
-                title: const Text('Réglages',
-                    style: TextStyle(color: VoyagoColors.text, fontWeight: FontWeight.w800)),
-                subtitle: const Text('Son, vibration, volume, heures calmes · navigation, Waze, péages',
-                    style: TextStyle(color: VoyagoColors.muted, fontSize: 12)),
-                trailing: const Icon(Icons.chevron_right_rounded, color: VoyagoColors.muted),
-              ),
-            ),
-
-            const SizedBox(height: 32),
-
-            // Bouton Déconnexion
-            SizedBox(
-              width: double.infinity,
-              child: OutlinedButton.icon(
-                onPressed: _logout,
-                icon: const Icon(Icons.logout, color: VoyagoColors.coral),
-                label: const Text(
-                  'Se déconnecter',
-                  style: TextStyle(
-                    color: VoyagoColors.coral,
-                    fontWeight: FontWeight.bold,
-                  ),
+      body: Column(
+        children: [
+          // Onglets principaux : le voyageur d'un côté, les réglages techniques de l'autre
+          _MainTabBar(controller: _mainTabs),
+          Expanded(
+            child: TabBarView(
+              controller: _mainTabs,
+              // Le glissement horizontal est réservé aux onglets secondaires
+              physics: const NeverScrollableScrollPhysics(),
+              children: [
+                _SectionTabs(
+                  controller: _profileTabs,
+                  sections: _profileSections,
+                  children: [
+                    _section([
+                      // Incitation à vérifier l'adresse e-mail (comptes e-mail non vérifiés)
+                      const EmailVerificationBanner(),
+                      // Mode Édition ou Hero Section
+                      if (_isEditing) _buildEditProfileCard(user) else _buildHeroSection(user, profile, trips),
+                      const SizedBox(height: 24),
+                      // Achievement Timeline (Métriques Clés en 3 colonnes)
+                      _buildAchievementTimeline(profile, trips),
+                      const SizedBox(height: 24),
+                      // Upgrade Pass / Voyagooo Pro Banner
+                      _buildUpgradeCard(user),
+                    ]),
+                    // Hall of Fame (Badges & Trophées 3D réels)
+                    _section([_buildHallOfFameSection(profile)]),
+                    // Traveler DNA (ADN du Voyageur dynamique selon les voyages réels)
+                    _section([_buildTravelerDnaSection(user, trips)]),
+                    // Section Mes Voyages
+                    _section([_buildTripsSection(tripsAsync)]),
+                  ],
                 ),
-                style: OutlinedButton.styleFrom(
-                  padding: const EdgeInsets.symmetric(vertical: 16),
-                  side: const BorderSide(color: Color(0x55FF4B4B)),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(16),
-                  ),
+                _SectionTabs(
+                  controller: _settingsTabs,
+                  sections: _settingsSections,
+                  children: [
+                    const NotificationSettingsView(),
+                    const NavigationSettingsView(),
+                    _section([_buildAccountSettings(user)]),
+                  ],
                 ),
-              ),
+              ],
             ),
-
-            const SizedBox(height: 48),
-          ],
-        ),
+          ),
+        ],
       ),
+    );
+  }
+
+  /// Contenu défilant d'un onglet secondaire
+  Widget _section(List<Widget> children) => SingleChildScrollView(
+        physics: const BouncingScrollPhysics(),
+        padding: const EdgeInsets.fromLTRB(16, 12, 16, 48),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: children),
+      );
+
+  /// Réglages › Compte : profil, abonnement, déconnexion
+  Widget _buildAccountSettings(AuthUser user) {
+    Widget tile(IconData icon, String title, String subtitle, VoidCallback onTap, {Color color = VoyagoColors.primary}) =>
+        Padding(
+          padding: const EdgeInsets.only(bottom: 8),
+          child: Material(
+            color: VoyagoColors.surface,
+            clipBehavior: Clip.antiAlias,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(16),
+              side: const BorderSide(color: VoyagoColors.cardBorder),
+            ),
+            child: ListTile(
+              onTap: onTap,
+              leading: Icon(icon, color: color),
+              title: Text(title, style: const TextStyle(color: VoyagoColors.text, fontWeight: FontWeight.w800)),
+              subtitle: Text(subtitle, style: const TextStyle(color: VoyagoColors.muted, fontSize: 12.5)),
+              trailing: const Icon(Icons.chevron_right_rounded, color: VoyagoColors.muted),
+            ),
+          ),
+        );
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        const EmailVerificationBanner(),
+        tile(Icons.edit_rounded, 'Modifier mon profil', 'Photo, pseudo, pays, ville, sensibilité au climat', _startEditing,
+            color: _ProfileColors.gold),
+        tile(
+          Icons.workspace_premium_rounded,
+          user.isProActive ? 'Mon abonnement Voyagooo Pro' : 'Passer à Voyagooo Pro',
+          user.isProActive
+              ? 'Formule ${switch (user.proTier) { 'monthly' => 'Mensuel', 'annual' => 'Annuel', 'lifetime' => 'À vie', _ => 'Pro' }} · avantages et quotas' : 'Voyages illimités, plan B pluie, modifications…',
+          () => context.go('/pricing'),
+          color: VoyagoColors.yellow,
+        ),
+        const SizedBox(height: 24),
+        // Bouton Déconnexion
+        OutlinedButton.icon(
+          onPressed: _logout,
+          icon: const Icon(Icons.logout, color: VoyagoColors.coral),
+          label: const Text(
+            'Se déconnecter',
+            style: TextStyle(
+              color: VoyagoColors.coral,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+          style: OutlinedButton.styleFrom(
+            padding: const EdgeInsets.symmetric(vertical: 16),
+            side: const BorderSide(color: Color(0x55FF4B4B)),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(16),
+            ),
+          ),
+        ),
+      ],
     );
   }
 
@@ -2691,6 +2766,109 @@ class _ProfileContentState extends ConsumerState<_ProfileContent> {
           ],
         ),
       ),
+    );
+  }
+}
+
+/// Onglets principaux du profil : Profil | Réglages
+class _MainTabBar extends StatelessWidget {
+  final TabController controller;
+  const _MainTabBar({required this.controller});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      margin: const EdgeInsets.fromLTRB(16, 4, 16, 6),
+      padding: const EdgeInsets.all(4),
+      decoration: BoxDecoration(
+        color: VoyagoColors.surface,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: VoyagoColors.cardBorder),
+      ),
+      child: TabBar(
+        controller: controller,
+        indicatorSize: TabBarIndicatorSize.tab,
+        dividerColor: Colors.transparent,
+        indicator: BoxDecoration(
+          color: _ProfileColors.gold.withValues(alpha: 0.16),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: _ProfileColors.gold.withValues(alpha: 0.55)),
+        ),
+        labelColor: _ProfileColors.gold,
+        unselectedLabelColor: VoyagoColors.muted,
+        labelStyle: const TextStyle(fontWeight: FontWeight.w800, fontSize: 14),
+        tabs: const [
+          Tab(height: 40, icon: null, child: Row(mainAxisSize: MainAxisSize.min, children: [
+            Icon(Icons.explore_rounded, size: 18), SizedBox(width: 6), Text('Profil'),
+          ])),
+          Tab(height: 40, child: Row(mainAxisSize: MainAxisSize.min, children: [
+            Icon(Icons.tune_rounded, size: 18), SizedBox(width: 6), Text('Réglages'),
+          ])),
+        ],
+      ),
+    );
+  }
+}
+
+/// Onglets secondaires en pastilles (défilables), puis leur contenu
+class _SectionTabs extends StatelessWidget {
+  final TabController controller;
+  final List<(String, String, IconData)> sections;
+  final List<Widget> children;
+
+  const _SectionTabs({required this.controller, required this.sections, required this.children});
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: [
+        SizedBox(
+          height: 44,
+          child: TabBar(
+            controller: controller,
+            isScrollable: true,
+            tabAlignment: TabAlignment.start,
+            padding: const EdgeInsets.symmetric(horizontal: 12),
+            labelPadding: const EdgeInsets.symmetric(horizontal: 4),
+            dividerColor: Colors.transparent,
+            indicator: const BoxDecoration(),
+            splashBorderRadius: BorderRadius.circular(20),
+            tabs: [
+              for (var i = 0; i < sections.length; i++)
+                AnimatedBuilder(
+                  animation: controller,
+                  builder: (_, __) {
+                    final selected = controller.index == i;
+                    return Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+                      decoration: BoxDecoration(
+                        color: selected ? VoyagoColors.primary.withValues(alpha: 0.16) : VoyagoColors.surface,
+                        borderRadius: BorderRadius.circular(20),
+                        border: Border.all(color: selected ? VoyagoColors.primary : VoyagoColors.cardBorder),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(sections[i].$3, size: 15, color: selected ? VoyagoColors.primary : VoyagoColors.muted),
+                          const SizedBox(width: 6),
+                          Text(
+                            sections[i].$2,
+                            style: TextStyle(
+                              color: selected ? VoyagoColors.text : VoyagoColors.muted,
+                              fontSize: 12.5,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                        ],
+                      ),
+                    );
+                  },
+                ),
+            ],
+          ),
+        ),
+        Expanded(child: TabBarView(controller: controller, children: children)),
+      ],
     );
   }
 }
