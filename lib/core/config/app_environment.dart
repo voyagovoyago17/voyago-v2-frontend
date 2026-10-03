@@ -36,6 +36,35 @@ class AppConfig {
   // true = IP locale Wi-Fi (nécessite d'autoriser le port 3333 dans le pare-feu Windows)
   static const bool useLanIpForDevice = false;
 
+  static bool? _isEmulatorCached;
+
+  /// Détecte automatiquement si l'application s'exécute sur l'émulateur Android officiel (QEMU / Ranchu).
+  static bool get isAndroidEmulator {
+    if (kIsWeb || !Platform.isAndroid) return false;
+    if (_isEmulatorCached != null) return _isEmulatorCached!;
+    try {
+      final qemu = Process.runSync('getprop', ['ro.kernel.qemu']);
+      if (qemu.stdout.toString().trim() == '1') {
+        _isEmulatorCached = true;
+        return true;
+      }
+      final hardware = Process.runSync('getprop', ['ro.hardware']);
+      final hw = hardware.stdout.toString().trim().toLowerCase();
+      if (hw.contains('goldfish') || hw.contains('ranchu')) {
+        _isEmulatorCached = true;
+        return true;
+      }
+      final model = Process.runSync('getprop', ['ro.product.model']);
+      final m = model.stdout.toString().trim().toLowerCase();
+      if (m.contains('sdk') || m.contains('emulator')) {
+        _isEmulatorCached = true;
+        return true;
+      }
+    } catch (_) {}
+    _isEmulatorCached = false;
+    return false;
+  }
+
   static AppEnvironment get environment {
     switch (_envDefine.toLowerCase()) {
       case 'prod':
@@ -59,8 +88,17 @@ class AppConfig {
     if (isProduction) {
       return productionBackendUrl;
     }
-    if (!kIsWeb && Platform.isAndroid && useLanIpForDevice) {
-      return localNetworkBackendUrl;
+    if (!kIsWeb && Platform.isAndroid) {
+      // 1. Émulateur Android : 10.0.2.2 est l'alias natif du localhost de la machine hôte
+      if (isAndroidEmulator) {
+        return androidEmulatorBackendUrl;
+      }
+      // 2. Téléphone physique sur Wi-Fi LAN
+      if (useLanIpForDevice) {
+        return localNetworkBackendUrl;
+      }
+      // 3. Téléphone physique sur câble USB (tunnel adb reverse)
+      return localhostBackendUrl;
     }
     return localhostBackendUrl;
   }
