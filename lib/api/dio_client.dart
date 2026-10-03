@@ -1,6 +1,7 @@
 import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
 import '../core/storage/secure_storage_service.dart';
+import '../core/config/app_environment.dart';
 import 'api_exceptions.dart';
 import 'endpoints.dart';
 
@@ -66,6 +67,43 @@ class DioClient {
                 error.requestOptions.path.contains('/api/auth/email/signup');
             if (!isAuthRoute) {
               onAuthExpired?.call();
+            }
+          }
+
+          // Fallback automatique pour Android en local : bascule transparente entre 10.0.2.2 et 127.0.0.1
+          final isConnErr = error.type == DioExceptionType.connectionError ||
+              (error.message != null && error.message!.contains('Connection refused'));
+          if (isConnErr && !kIsWeb && defaultTargetPlatform == TargetPlatform.android && !AppConfig.isProduction) {
+            final currentBase = _dio.options.baseUrl;
+            final isLocalHost = currentBase.contains('127.0.0.1') || currentBase.contains('localhost');
+            final isEmulatorIp = currentBase.contains('10.0.2.2');
+            final hasAlreadyRetried = error.requestOptions.extra['retried_fallback'] == true;
+
+            if (!hasAlreadyRetried && (isLocalHost || isEmulatorIp)) {
+              final newBase = isLocalHost
+                  ? currentBase.replaceAll(RegExp(r'127\.0\.0\.1|localhost'), '10.0.2.2')
+                  : currentBase.replaceAll('10.0.2.2', '127.0.0.1');
+              if (kDebugMode) {
+                debugPrint('🔄 [DIO FALLBACK] Connexion échouée sur $currentBase -> bascule automatique sur $newBase');
+              }
+              updateBaseUrl(newBase);
+
+              final retryOptions = Options(
+                method: error.requestOptions.method,
+                headers: error.requestOptions.headers,
+                extra: {...error.requestOptions.extra, 'retried_fallback': true},
+              );
+              try {
+                final response = await _dio.request(
+                  error.requestOptions.path,
+                  data: error.requestOptions.data,
+                  queryParameters: error.requestOptions.queryParameters,
+                  options: retryOptions,
+                );
+                return handler.resolve(response);
+              } catch (_) {
+                // Si la bascule échoue également, on renvoie l'erreur normale
+              }
             }
           }
 
