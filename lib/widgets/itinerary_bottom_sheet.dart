@@ -857,13 +857,6 @@ class _TimelinePOI extends StatelessWidget {
     );
   }
 
-  static String _formatReviews(int count) {
-    if (count >= 1000) {
-      return '${(count / 1000).toStringAsFixed(1)}k';
-    }
-    return count.toString();
-  }
-
   static String _defaultInsight(String category, String name) {
     switch (category.toLowerCase()) {
       case 'gastronomie':
@@ -922,11 +915,10 @@ class _PlaceRatingRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // Seuls les vrais avis des voyageurs Voyagooo comptent : aucune note estimée n'est affichée
     final community = stats != null && stats!.hasCommunityReviews;
-    final rating = community ? stats!.ratingAvg! : poi.rating;
-    final countLabel = community
-        ? '${stats!.reviewsCount} avis'
-        : _TimelinePOI._formatReviews(poi.reviewsCount);
+    final double rating = community ? stats!.ratingAvg! : 0;
+    final countLabel = community ? '${stats!.reviewsCount} avis' : '';
     final myRating = stats?.myRating;
 
     return GestureDetector(
@@ -953,7 +945,10 @@ class _PlaceRatingRow extends StatelessWidget {
             child: Text.rich(
               TextSpan(
                 children: [
-                  TextSpan(text: '${rating.toStringAsFixed(1)} ($countLabel)'),
+                  TextSpan(
+                    text: community ? '${rating.toStringAsFixed(1)} ($countLabel)' : 'Pas encore d’avis · sois le premier à noter',
+                    style: community ? null : const TextStyle(color: VoyagoColors.muted, fontWeight: FontWeight.w500),
+                  ),
                   if (community && stats!.likesCount > 0) ...[
                     const TextSpan(text: '  '),
                     const WidgetSpan(

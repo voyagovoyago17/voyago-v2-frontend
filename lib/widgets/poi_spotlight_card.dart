@@ -65,8 +65,6 @@ class PoiSpotlightCard extends StatelessWidget {
                       spacing: 8,
                       runSpacing: 6,
                       children: [
-                        _InfoChip(icon: Icons.star_rounded, color: VoyagoColors.yellow,
-                            label: '${poi.rating.toStringAsFixed(1)} (${_compact(poi.reviewsCount)})'),
                         _InfoChip(icon: Icons.schedule_rounded, color: VoyagoColors.blue, label: _visitDuration),
                         if (routeFromMe != null)
                           _InfoChip(
@@ -227,8 +225,6 @@ class PoiSpotlightCard extends StatelessWidget {
       child: Icon(getCategoryIcon(poi.category), color: Colors.white38, size: 48),
     );
   }
-
-  static String _compact(int n) => n >= 1000 ? '${(n / 1000).toStringAsFixed(n >= 10000 ? 0 : 1)}k' : '$n';
 }
 
 class _InfoChip extends StatelessWidget {
