@@ -105,35 +105,63 @@ class MapPoiPin extends StatelessWidget {
 
 /// The icon for a POI category
 IconData getCategoryIcon(String category) {
-  switch (category.toLowerCase()) {
-    case 'gastronomie':
-    case 'restaurant':
-    case 'food':
-      return Icons.restaurant;
-    case 'culture':
-    case 'museum':
-    case 'art':
-      return Icons.museum;
-    case 'nature':
-    case 'parc':
-    case 'park':
-      return Icons.park;
-    case 'shopping':
-      return Icons.shopping_bag;
-    case 'nightlife':
-    case 'bar':
-      return Icons.local_bar;
-    case 'bien_etre':
-    case 'wellness':
-    case 'spa':
-      return Icons.spa;
-    case 'sport':
-    case 'adventure':
-      return Icons.surfing;
-    case 'plage':
-    case 'beach':
-      return Icons.beach_access;
-    default:
-      return Icons.place;
+  final cat = category.toLowerCase();
+  if (cat.contains('gaming') || cat.contains('jeu') || cat.contains('esport') || cat.contains('arcade')) {
+    return Icons.sports_esports;
   }
+  if (cat.contains('montagne') || cat.contains('sommet') || cat.contains('alpin')) {
+    return Icons.landscape;
+  }
+  if (cat.contains('safari') || cat.contains('faune') || cat.contains('animal')) {
+    return Icons.pets;
+  }
+  if (cat.contains('tech') || cat.contains('vr') || cat.contains('futur')) {
+    return Icons.memory;
+  }
+  if (cat.contains('cinema') || cat.contains('film') || cat.contains('série')) {
+    return Icons.movie;
+  }
+  if (cat.contains('photo') || cat.contains('mirador') || cat.contains('vue')) {
+    return Icons.camera_alt;
+  }
+  if (cat.contains('mystere') || cat.contains('legende') || cat.contains('chateau')) {
+    return Icons.castle;
+  }
+  if (cat.contains('sensation') || cat.contains('attraction') || cat.contains('parc')) {
+    return Icons.attractions;
+  }
+  if (cat.contains('roadtrip') || cat.contains('route') || cat.contains('auto')) {
+    return Icons.directions_car;
+  }
+  if (cat.contains('spiritualite') || cat.contains('temple') || cat.contains('zen')) {
+    return Icons.self_improvement;
+  }
+  if (cat.contains('famille') || cat.contains('enfant')) {
+    return Icons.family_restroom;
+  }
+  if (cat.contains('gastro') || cat.contains('restaurant') || cat.contains('food')) {
+    return Icons.restaurant;
+  }
+  if (cat.contains('culture') || cat.contains('museum') || cat.contains('art')) {
+    return Icons.museum;
+  }
+  if (cat.contains('nature') || cat.contains('foret') || cat.contains('forêt')) {
+    return Icons.park;
+  }
+  if (cat.contains('shopping') || cat.contains('mode') || cat.contains('vintage')) {
+    return Icons.shopping_bag;
+  }
+  if (cat.contains('nightlife') || cat.contains('bar') || cat.contains('club')) {
+    return Icons.local_bar;
+  }
+  if (cat.contains('bien_etre') || cat.contains('spa') || cat.contains('wellness') || cat.contains('yoga')) {
+    return Icons.spa;
+  }
+  if (cat.contains('sport') || cat.contains('surf') || cat.contains('escalade')) {
+    return Icons.surfing;
+  }
+  if (cat.contains('plage') || cat.contains('mer') || cat.contains('beach')) {
+    return Icons.beach_access;
+  }
+  return Icons.place;
 }
