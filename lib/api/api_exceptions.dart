@@ -1,4 +1,5 @@
 import 'package:dio/dio.dart';
+import 'package:flutter/foundation.dart';
 
 class ApiException implements Exception {
   final String message;
@@ -22,7 +23,7 @@ class ApiException implements Exception {
       case DioExceptionType.sendTimeout:
       case DioExceptionType.receiveTimeout:
         return NetworkException(
-          message: 'Délai d’attente dépassé. Vérifiez votre connexion internet.',
+          message: 'La connexion est trop lente. Vérifie ton réseau et réessaie.',
           statusCode: dioError.response?.statusCode,
         );
 
@@ -47,6 +48,9 @@ class ApiException implements Exception {
           extractedMessage = data;
         }
 
+        // Message lisible par le voyageur (jamais de texte technique ou en anglais)
+        extractedMessage = _friendlyMessage(extractedMessage, statusCode);
+
         switch (statusCode) {
           case 400:
             return ValidationException(
@@ -56,9 +60,9 @@ class ApiException implements Exception {
             );
           case 401:
             return AuthExpiredException(
-              message: extractedMessage.contains('Invalid') || extractedMessage.contains('incorrect')
+              message: _isLoginError(extractedMessage)
                   ? extractedMessage
-                  : 'Session expirée ou non autorisée. Veuillez vous reconnecter.',
+                  : 'Ta session a expiré. Reconnecte-toi pour continuer.',
               statusCode: 401,
             );
           case 403:
@@ -84,14 +88,18 @@ class ApiException implements Exception {
           case 503:
           default:
             return ServerException(
-              message: extractedMessage.isNotEmpty ? extractedMessage : 'Erreur interne du serveur (500).',
+              message: extractedMessage.isNotEmpty
+                  ? extractedMessage
+                  : 'Le service est momentanément indisponible. Réessaie dans un instant.',
               statusCode: statusCode,
             );
         }
 
       case DioExceptionType.connectionError:
+        // Le détail technique reste dans la console de développement
+        debugPrint('Serveur injoignable : ${dioError.requestOptions.uri} (${dioError.error})');
         return NetworkException(
-          message: 'Impossible de joindre le serveur Voyagooo. Vérifiez que le backend est bien démarré sur le port 3333.',
+          message: 'Connexion impossible pour le moment. Vérifie ta connexion internet et réessaie.',
         );
 
       case DioExceptionType.cancel:
@@ -109,6 +117,68 @@ class ApiException implements Exception {
         );
     }
   }
+}
+
+/// Messages connus du serveur (en anglais) traduits pour le voyageur.
+const Map<String, String> _knownMessages = {
+  'invalid email or password': 'E-mail ou mot de passe incorrect. Vérifie tes identifiants et réessaie.',
+  'this account uses a different login method':
+      'Ce compte a été créé avec Google. Utilise « Continuer avec Google » pour te connecter.',
+  'email already registered': 'Cette adresse e-mail est déjà associée à un compte Voyagooo.',
+  'internal server error': 'Le service est momentanément indisponible. Réessaie dans un instant.',
+  'too many requests': 'Trop de tentatives. Patiente un instant avant de réessayer.',
+  'unauthorized': 'Ta session a expiré. Reconnecte-toi pour continuer.',
+  'forbidden': 'Tu n’as pas accès à cette action.',
+};
+
+bool _isLoginError(String message) =>
+    message.startsWith('E-mail ou mot de passe incorrect') || message.startsWith('Ce compte a été créé avec Google');
+
+/// Ressemble à un message technique en anglais (validation, exception brute...) ?
+final RegExp _technicalPattern = RegExp(
+  r'\b(must|should|invalid|error|exception|cannot|failed|not found|unauthorized|forbidden|undefined|null|bad request|is not|property)\b',
+  caseSensitive: false,
+);
+
+/// Transforme un message serveur en message clair, en français, pour le voyageur.
+/// Les messages déjà rédigés en français par le serveur sont conservés tels quels.
+String _friendlyMessage(String raw, int? statusCode) {
+  final lines = raw.split('\n').map((l) => l.trim()).where((l) => l.isNotEmpty).toList();
+  final translated = <String>[];
+  for (final line in lines) {
+    final known = _knownMessages[line.toLowerCase().replaceAll(RegExp(r'[.!]+$'), '')];
+    if (known != null) {
+      translated.add(known);
+    } else if (_validationMessage(line) case final validation?) {
+      translated.add(validation);
+    } else if (!_technicalPattern.hasMatch(line)) {
+      translated.add(line);
+    }
+  }
+  if (translated.isNotEmpty) return translated.toSet().join('\n');
+  return switch (statusCode) {
+    400 || 422 => 'Certaines informations sont invalides. Vérifie le formulaire et réessaie.',
+    401 => 'Ta session a expiré. Reconnecte-toi pour continuer.',
+    403 => 'Tu n’as pas accès à cette action.',
+    404 => 'Élément introuvable. Il a peut-être été supprimé.',
+    429 => 'Trop de tentatives. Patiente un instant avant de réessayer.',
+    _ => 'Le service est momentanément indisponible. Réessaie dans un instant.',
+  };
+}
+
+/// Erreurs de validation des formulaires (class-validator) les plus courantes.
+String? _validationMessage(String line) {
+  final l = line.toLowerCase();
+  if (l.startsWith('email must be an email') || l.startsWith('email should not be empty')) {
+    return 'Adresse e-mail invalide.';
+  }
+  final minLength = RegExp(r'^(\w+) must be longer than or equal to (\d+) characters').firstMatch(l);
+  if (minLength != null) {
+    final field = minLength.group(1) == 'password' || minLength.group(1) == 'new_password' ? 'Le mot de passe' : 'Ce champ';
+    return '$field doit contenir au moins ${minLength.group(2)} caractères.';
+  }
+  if (RegExp(r'^(password|new_password) should not be empty').hasMatch(l)) return 'Saisis ton mot de passe.';
+  return null;
 }
 
 class NetworkException extends ApiException {
