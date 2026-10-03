@@ -91,7 +91,7 @@ class _CommunityScreenState extends ConsumerState<CommunityScreen>
         }
       }
     } catch (e) {
-      if (mounted) {
+      if (mounted && !await showJoinRefusalIfNeeded(context, e) && mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             backgroundColor: VoyagoColors.coral,
@@ -134,6 +134,8 @@ class _CommunityScreenState extends ConsumerState<CommunityScreen>
       if (circleId.isNotEmpty) context.go('/circle/$circleId');
     } on ApiException catch (e) {
       if (!mounted) return;
+      // Conditions non remplies (ex. mineur dans un cercle 18+) : fenêtre explicative
+      if (await showJoinRefusalIfNeeded(context, e) || !mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(backgroundColor: VoyagoColors.coral, content: Text(e.message)),
       );
@@ -413,7 +415,10 @@ class _CommunityScreenState extends ConsumerState<CommunityScreen>
                     return CircleCard(
                       circle: circle,
                       isJoining: isJoining,
-                      onTap: () => context.go('/circle/${circle.id}'),
+                      // Cercle privé non rejoint : fenêtre de demande, le cercle ne s'ouvre pas
+                      onTap: () => circle.isLocked
+                          ? requestToJoinCircle(context, ref, circle)
+                          : context.go('/circle/${circle.id}'),
                       onToggleJoin: () => _handleToggleJoin(circle),
                     );
                   },

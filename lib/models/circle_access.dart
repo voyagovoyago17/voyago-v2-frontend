@@ -186,3 +186,85 @@ class JoinRequestResult {
 extension on String {
   String? get ifEmptyNull => isEmpty ? null : this;
 }
+
+/// Membre d'un cercle (liste complète, réservée aux membres).
+class CircleMember {
+  final String userId;
+  final String role;
+  final String name;
+  final String? pseudo;
+  final String avatarEmoji;
+  final String? picture;
+  final String? country;
+  final bool isPro;
+  final bool emailVerified;
+  final int level;
+  final DateTime? joinedAt;
+
+  const CircleMember({
+    required this.userId,
+    required this.role,
+    required this.name,
+    this.pseudo,
+    this.avatarEmoji = '🧭',
+    this.picture,
+    this.country,
+    this.isPro = false,
+    this.emailVerified = false,
+    this.level = 1,
+    this.joinedAt,
+  });
+
+  factory CircleMember.fromJson(Map<String, dynamic> json) => CircleMember(
+        userId: json['user_id']?.toString() ?? '',
+        role: json['role']?.toString() ?? 'explorer',
+        name: json['name']?.toString() ?? 'Voyageur',
+        pseudo: json['pseudo']?.toString(),
+        avatarEmoji: json['avatar_emoji']?.toString() ?? '🧭',
+        picture: json['picture']?.toString(),
+        country: json['country']?.toString(),
+        isPro: json['is_pro'] == true,
+        emailVerified: json['email_verified'] == true,
+        level: (json['level'] as num?)?.toInt() ?? 1,
+        joinedAt: DateTime.tryParse(json['joined_at']?.toString() ?? '')?.toLocal(),
+      );
+
+  String get displayName => pseudo != null && pseudo!.isNotEmpty ? pseudo! : name;
+  bool get isCreator => role == 'creator';
+  bool get isAdmin => role == 'admin';
+
+  CircleMember withRole(String newRole) => CircleMember(
+        userId: userId,
+        role: newRole,
+        name: name,
+        pseudo: pseudo,
+        avatarEmoji: avatarEmoji,
+        picture: picture,
+        country: country,
+        isPro: isPro,
+        emailVerified: emailVerified,
+        level: level,
+        joinedAt: joinedAt,
+      );
+}
+
+class CircleMembersPage {
+  final List<CircleMember> members;
+  final int total;
+  final int? maxMembers;
+  final String? myRole;
+  final bool hasMore;
+
+  const CircleMembersPage({required this.members, required this.total, this.maxMembers, this.myRole, this.hasMore = false});
+
+  factory CircleMembersPage.fromJson(Map<String, dynamic> json) => CircleMembersPage(
+        members: (json['members'] as List? ?? [])
+            .whereType<Map>()
+            .map((e) => CircleMember.fromJson(Map<String, dynamic>.from(e)))
+            .toList(),
+        total: (json['total'] as num?)?.toInt() ?? 0,
+        maxMembers: (json['max_members'] as num?)?.toInt(),
+        myRole: json['my_role']?.toString(),
+        hasMore: json['has_more'] == true,
+      );
+}

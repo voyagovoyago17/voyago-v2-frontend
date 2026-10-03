@@ -69,6 +69,7 @@ class ApiException implements Exception {
             return ForbiddenException(
               message: extractedMessage.isNotEmpty ? extractedMessage : 'Accès refusé.',
               statusCode: 403,
+              details: data,
             );
           case 404:
             return NotFoundException(
@@ -192,7 +193,7 @@ class AuthExpiredException extends ApiException {
 }
 
 class ForbiddenException extends ApiException {
-  ForbiddenException({required super.message, super.statusCode})
+  ForbiddenException({required super.message, super.statusCode, super.details})
       : super(code: 'FORBIDDEN');
 }
 

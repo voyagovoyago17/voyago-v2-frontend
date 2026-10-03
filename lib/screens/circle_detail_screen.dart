@@ -78,7 +78,7 @@ class _CircleDetailScreenState extends ConsumerState<CircleDetailScreen> {
         ref.invalidate(communityCirclesProvider);
       }
     } catch (e) {
-      if (mounted) {
+      if (mounted && !await showJoinRefusalIfNeeded(context, e) && mounted) {
         messenger.showSnackBar(
           SnackBar(
             backgroundColor: VoyagoColors.coral,
@@ -158,11 +158,8 @@ class _CircleDetailScreenState extends ConsumerState<CircleDetailScreen> {
       backgroundColor: VoyagoColors.background,
       body: circleAsync.when(
         data: (circle) => circle.isLocked
-            ? RefreshIndicator(
-                onRefresh: () => ref.refresh(circleDetailProvider(widget.circleId).future),
-                color: VoyagoColors.primary,
-                child: LockedCircleView(circle: circle),
-              )
+            // Cercle privé dont je ne suis pas membre : il ne s'ouvre pas
+            ? LockedCircleGate(circle: circle)
             : RefreshIndicator(
           onRefresh: () async {
             ref.invalidate(circleChallengesProvider(circle.id));
@@ -532,7 +529,9 @@ class _CircleDetailScreenState extends ConsumerState<CircleDetailScreen> {
                               const Text('👥', style: TextStyle(fontSize: 16)),
                               const SizedBox(width: 6),
                               Text(
-                                'Explorateurs de la tribu (${circle.membersCount})',
+                                circle.joinRules.maxMembers != null
+                                    ? 'Explorateurs (${circle.membersCount}/${circle.joinRules.maxMembers})'
+                                    : 'Explorateurs de la tribu (${circle.membersCount})',
                                 style: const TextStyle(
                                   color: VoyagoColors.text,
                                   fontSize: 16,
@@ -541,6 +540,12 @@ class _CircleDetailScreenState extends ConsumerState<CircleDetailScreen> {
                               ),
                             ],
                           ),
+                          if (circle.isMember || circle.isPublic)
+                            TextButton(
+                              onPressed: () => showCircleMembersSheet(context, circle),
+                              child: const Text('Voir tout',
+                                  style: TextStyle(color: VoyagoColors.primary, fontWeight: FontWeight.w700)),
+                            ),
                         ],
                       ),
                       const SizedBox(height: 12),
@@ -557,7 +562,7 @@ class _CircleDetailScreenState extends ConsumerState<CircleDetailScreen> {
                               final isCreator = m.role == 'creator';
 
                               return GestureDetector(
-                                onTap: () => context.go('/user/${m.userId}'),
+                                onTap: () => context.push('/user/${m.userId}'),
                                 child: Column(
                                   mainAxisSize: MainAxisSize.min,
                                   children: [

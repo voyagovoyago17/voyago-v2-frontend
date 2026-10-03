@@ -399,6 +399,18 @@ class CommunityApi {
         if (listed != null) 'listed': listed,
       });
 
+  /// Membres du cercle, page par page
+  Future<CircleMembersPage> getCircleMembers(String circleId, {int skip = 0, int limit = 30}) async {
+    final data = await _client.get(Endpoints.circleMembers(circleId), queryParameters: {'skip': skip, 'limit': limit});
+    return CircleMembersPage.fromJson(data as Map<String, dynamic>);
+  }
+
+  Future<void> removeCircleMember(String circleId, String userId) =>
+      _client.delete(Endpoints.circleMember(circleId, userId));
+
+  Future<void> setCircleMemberRole(String circleId, String userId, String role) =>
+      _client.patch('${Endpoints.circleMember(circleId, userId)}/role', data: {'role': role});
+
   /// Quitter un cercle
   Future<Map<String, dynamic>> leaveCircle(String circleId) async {
     final data = await _client.post(Endpoints.leaveCircle(circleId));

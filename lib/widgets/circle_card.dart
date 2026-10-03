@@ -217,7 +217,7 @@ class CircleCard extends StatelessWidget {
                   ],
                   if (!circle.joinRules.isEmpty) ...[
                     const SizedBox(height: 8),
-                    JoinRuleChips(rules: circle.joinRules),
+                    JoinRuleChips(rules: circle.joinRules, membersCount: circle.membersCount),
                   ],
                   // Fondateur : demandes en attente
                   if (circle.pendingRequestsCount > 0) ...[

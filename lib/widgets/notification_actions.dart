@@ -17,7 +17,8 @@ bool canOpenNotification(AppNotification n) {
     case 'comment':
       return n.data['target_type'] != null && n.data['target_id'] != null;
     case 'circle_request':
-      return n.data['circle_id'] != null;
+      // Un cercle privé refusé ne s'ouvre pas
+      return n.data['circle_id'] != null && n.data['kind'] != 'rejected';
     case 'system':
       return n.data['journal'] == true && (n.tripId?.isNotEmpty ?? false);
     default:

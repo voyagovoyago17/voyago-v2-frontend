@@ -283,6 +283,17 @@ class CommunityController {
     _ref.invalidate(communityCirclesProvider);
   }
 
+  Future<void> removeCircleMember(String circleId, String userId) async {
+    await _api.removeCircleMember(circleId, userId);
+    _ref.invalidate(circleDetailProvider(circleId));
+    _ref.invalidate(communityCirclesProvider);
+  }
+
+  Future<void> setCircleMemberRole(String circleId, String userId, String role) async {
+    await _api.setCircleMemberRole(circleId, userId, role);
+    _ref.invalidate(circleDetailProvider(circleId));
+  }
+
   /// Rejoint un cercle via son code d'invitation et renvoie l'identifiant du cercle.
   Future<String> joinCircleByCode(String code) async {
     final res = await _api.joinCircleByCode(code);

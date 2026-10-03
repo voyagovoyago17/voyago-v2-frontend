@@ -112,11 +112,20 @@ class _CheckRow extends StatelessWidget {
 class JoinRuleChips extends StatelessWidget {
   final JoinRules rules;
 
-  const JoinRuleChips({super.key, required this.rules});
+  /// Nombre de membres actuel : affiche « 18/30 places » au lieu de « 30 places »
+  final int? membersCount;
+
+  const JoinRuleChips({super.key, required this.rules, this.membersCount});
 
   @override
   Widget build(BuildContext context) {
-    final chips = rules.chips;
+    final chips = [
+      for (final c in rules.chips)
+        if (rules.maxMembers != null && membersCount != null && c == '${rules.maxMembers} places')
+          '$membersCount/${rules.maxMembers} places'
+        else
+          c,
+    ];
     if (chips.isEmpty) return const SizedBox.shrink();
     return Wrap(
       spacing: 6,
@@ -280,23 +289,7 @@ class _JoinRequestSheetState extends ConsumerState<_JoinRequestSheet> {
                   ),
                 ),
                 const SizedBox(height: 16),
-                Row(
-                  children: [
-                    Text(circle.avatarEmoji, style: const TextStyle(fontSize: 30)),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          const Text('Demander à rejoindre',
-                              style: TextStyle(color: VoyagoColors.muted, fontSize: 12, fontWeight: FontWeight.w600)),
-                          Text(circle.name,
-                              style: const TextStyle(color: VoyagoColors.text, fontSize: 18, fontWeight: FontWeight.w800)),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
+                _CircleShowcase(circle: circle),
                 const SizedBox(height: 16),
                 JoinConditionsCard(checks: checks, autoApprove: circle.autoApprove, compact: true),
                 const SizedBox(height: 14),
@@ -308,9 +301,9 @@ class _JoinRequestSheetState extends ConsumerState<_JoinRequestSheet> {
                       borderRadius: BorderRadius.circular(14),
                       border: Border.all(color: VoyagoColors.coral.withValues(alpha: 0.35)),
                     ),
-                    child: const Text(
-                      "Tu ne remplis pas encore toutes les conditions. Gagne de l'XP en voyageant, complète ton profil… et reviens !",
-                      style: TextStyle(color: VoyagoColors.text, fontSize: 12.5, height: 1.4),
+                    child: Text(
+                      refusalAdvice(checks),
+                      style: const TextStyle(color: VoyagoColors.text, fontSize: 12.5, height: 1.4),
                     ),
                   )
                 else ...[
@@ -357,6 +350,19 @@ class _JoinRequestSheetState extends ConsumerState<_JoinRequestSheet> {
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
                       elevation: 0,
                     ),
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Center(
+                  child: TextButton.icon(
+                    onPressed: () {
+                      final host = Navigator.of(context, rootNavigator: true).context;
+                      Navigator.pop(context);
+                      joinCircleWithCode(host, ref);
+                    },
+                    icon: const Icon(Icons.vpn_key_rounded, size: 17, color: VoyagoColors.primary),
+                    label: const Text("J'ai un code d'invitation",
+                        style: TextStyle(color: VoyagoColors.primary, fontWeight: FontWeight.w700)),
                   ),
                 ),
               ],
@@ -408,59 +414,82 @@ class JoinRequestButton extends ConsumerWidget {
 }
 
 // =============================================================================
-// Vitrine d'un cercle privé (non-membre)
+// Cercle privé (non-membre) : il ne s'ouvre pas, seule la fenêtre de demande apparaît
 // =============================================================================
 
-class LockedCircleView extends ConsumerWidget {
+/// Lien direct vers un cercle privé (notification, partage...) : on n'ouvre pas le cercle,
+/// on affiche la fenêtre de demande puis on revient en arrière.
+class LockedCircleGate extends ConsumerStatefulWidget {
   final CommunityCircle circle;
 
-  const LockedCircleView({super.key, required this.circle});
+  const LockedCircleGate({super.key, required this.circle});
 
-  Future<void> _joinWithCode(BuildContext context, WidgetRef ref) async {
-    final messenger = ScaffoldMessenger.of(context);
-    final router = GoRouter.of(context);
-    if (ref.read(currentUserProvider) == null) {
-      messenger.showSnackBar(const SnackBar(
-        backgroundColor: VoyagoColors.orange,
-        content: Text('Connecte-toi pour rejoindre ce cercle'),
-      ));
-      return;
-    }
-    final code = await showDialog<String>(context: context, builder: (_) => const _InviteCodeDialog());
-    if (code == null || code.trim().isEmpty) return;
-    try {
-      final circleId = await ref.read(communityControllerProvider).joinCircleByCode(code);
-      messenger.showSnackBar(const SnackBar(
-        backgroundColor: VoyagoColors.primary,
-        content: Text('🎉 Bienvenue dans ta nouvelle tribu !'),
-      ));
-      if (circleId.isNotEmpty) router.go('/circle/$circleId');
-    } on ApiException catch (e) {
-      messenger.showSnackBar(SnackBar(backgroundColor: VoyagoColors.coral, content: Text(e.message)));
-    }
+  @override
+  ConsumerState<LockedCircleGate> createState() => _LockedCircleGateState();
+}
+
+class _LockedCircleGateState extends ConsumerState<LockedCircleGate> {
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      if (!mounted) return;
+      await requestToJoinCircle(context, ref, widget.circle);
+      if (!mounted) return;
+      // Entré entre-temps (code, acceptation auto) : la page du cercle s'affiche normalement
+      if (ref.read(circleDetailProvider(widget.circle.id)).valueOrNull?.isLocked == false) return;
+      if (context.canPop()) {
+        context.pop();
+      } else {
+        context.go('/community');
+      }
+    });
   }
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final creator = circle.creator;
-    final creatorName = (creator?['pseudo'] ?? creator?['name'])?.toString();
-
-    return CustomScrollView(
-      slivers: [
-        SliverAppBar(
-          expandedHeight: 220,
-          pinned: true,
-          backgroundColor: VoyagoColors.surface,
-          leading: IconButton(
-            icon: Container(
-              padding: const EdgeInsets.all(8),
-              decoration: BoxDecoration(color: Colors.black.withValues(alpha: 0.55), shape: BoxShape.circle),
-              child: const Icon(Icons.arrow_back, color: Colors.white, size: 20),
+  Widget build(BuildContext context) {
+    return Container(
+      color: VoyagoColors.background,
+      alignment: Alignment.center,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            padding: const EdgeInsets.all(22),
+            decoration: BoxDecoration(
+              color: VoyagoColors.surface,
+              shape: BoxShape.circle,
+              border: Border.all(color: VoyagoColors.cardBorder),
             ),
-            onPressed: () => context.canPop() ? context.pop() : context.go('/community'),
+            child: const Icon(Icons.lock_rounded, color: VoyagoColors.muted, size: 36),
           ),
-          flexibleSpace: FlexibleSpaceBar(
-            background: Stack(
+          const SizedBox(height: 14),
+          const Text('Cercle privé', style: TextStyle(color: VoyagoColors.muted, fontWeight: FontWeight.w700)),
+        ],
+      ),
+    );
+  }
+}
+
+/// Vitrine d'un cercle privé dans la fenêtre de demande (sans son contenu ni ses membres).
+class _CircleShowcase extends StatelessWidget {
+  final CommunityCircle circle;
+
+  const _CircleShowcase({required this.circle});
+
+  @override
+  Widget build(BuildContext context) {
+    final founder = (circle.creator?['pseudo'] ?? circle.creator?['name'])?.toString();
+    final quota = circle.joinRules.maxMembers;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        ClipRRect(
+          borderRadius: BorderRadius.circular(18),
+          child: SizedBox(
+            height: 110,
+            width: double.infinity,
+            child: Stack(
               fit: StackFit.expand,
               children: [
                 CachedNetworkImage(
@@ -468,97 +497,55 @@ class LockedCircleView extends ConsumerWidget {
                   fit: BoxFit.cover,
                   errorWidget: (_, __, ___) => Container(color: VoyagoColors.cardBorder),
                 ),
-                // Voile flouté : le contenu reste réservé aux membres
-                Container(color: Colors.black.withValues(alpha: 0.55)),
-                Center(
-                  child: Container(
-                    padding: const EdgeInsets.all(18),
-                    decoration: BoxDecoration(
-                      color: Colors.black.withValues(alpha: 0.45),
-                      shape: BoxShape.circle,
-                      border: Border.all(color: Colors.white.withValues(alpha: 0.25)),
-                    ),
-                    child: const Icon(Icons.lock_rounded, color: Colors.white, size: 34),
+                Container(color: Colors.black.withValues(alpha: 0.5)),
+                Positioned(
+                  left: 14,
+                  bottom: 12,
+                  right: 14,
+                  child: Row(
+                    children: [
+                      Text(circle.avatarEmoji, style: const TextStyle(fontSize: 28)),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Text(circle.name,
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.w800)),
+                      ),
+                      const Icon(Icons.lock_rounded, color: Colors.white70, size: 20),
+                    ],
                   ),
                 ),
               ],
             ),
           ),
         ),
-        SliverPadding(
-          padding: const EdgeInsets.fromLTRB(20, 18, 20, 40),
-          sliver: SliverList(
-            delegate: SliverChildListDelegate([
-              Row(
-                children: [
-                  Text(circle.avatarEmoji, style: const TextStyle(fontSize: 30)),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: Text(circle.name,
-                        style: const TextStyle(color: VoyagoColors.text, fontSize: 22, fontWeight: FontWeight.w800)),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 8),
-              Wrap(
-                spacing: 12,
-                runSpacing: 6,
-                children: [
-                  const _Meta(icon: Icons.lock_outline, label: 'Cercle privé · sur demande'),
-                  _Meta(icon: Icons.group_rounded, label: '${circle.membersCount} membre${circle.membersCount > 1 ? 's' : ''}'),
-                  _Meta(icon: Icons.location_on_rounded, label: circle.locationDisplay),
-                  if (creatorName != null) _Meta(icon: Icons.workspace_premium_rounded, label: 'Fondé par $creatorName'),
-                ],
-              ),
-              if (circle.description.isNotEmpty) ...[
-                const SizedBox(height: 14),
-                Text(circle.description, style: const TextStyle(color: VoyagoColors.muted, fontSize: 14, height: 1.45)),
-              ],
-              const SizedBox(height: 18),
-              JoinConditionsCard(checks: circle.joinChecks, autoApprove: circle.autoApprove),
-              const SizedBox(height: 18),
-              SizedBox(width: double.infinity, child: JoinRequestButton(circle: circle)),
-              if (circle.hasPendingRequest)
-                const Padding(
-                  padding: EdgeInsets.only(top: 8),
-                  child: Text(
-                    'Tu seras prévenu dès que le fondateur aura répondu. Touche le bouton pour annuler.',
-                    textAlign: TextAlign.center,
-                    style: TextStyle(color: VoyagoColors.muted, fontSize: 12),
-                  ),
-                ),
-              const SizedBox(height: 10),
-              Center(
-                child: TextButton.icon(
-                  onPressed: () => _joinWithCode(context, ref),
-                  icon: const Icon(Icons.vpn_key_rounded, size: 18, color: VoyagoColors.primary),
-                  label: const Text("J'ai un code d'invitation",
-                      style: TextStyle(color: VoyagoColors.primary, fontWeight: FontWeight.w700)),
-                ),
-              ),
-              const SizedBox(height: 18),
-              Container(
-                padding: const EdgeInsets.all(14),
-                decoration: BoxDecoration(
-                  color: VoyagoColors.surface,
-                  borderRadius: BorderRadius.circular(16),
-                  border: Border.all(color: VoyagoColors.cardBorder),
-                ),
-                child: const Row(
-                  children: [
-                    Icon(Icons.visibility_off_rounded, color: VoyagoColors.muted, size: 20),
-                    SizedBox(width: 10),
-                    Expanded(
-                      child: Text(
-                        'Les voyages, moments et projets de cette tribu sont réservés à ses membres.',
-                        style: TextStyle(color: VoyagoColors.muted, fontSize: 12.5, height: 1.4),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ]),
-          ),
+        const SizedBox(height: 10),
+        Wrap(
+          spacing: 12,
+          runSpacing: 4,
+          children: [
+            _Meta(
+              icon: Icons.group_rounded,
+              label: quota != null
+                  ? '${circle.membersCount}/$quota membres'
+                  : '${circle.membersCount} membre${circle.membersCount > 1 ? 's' : ''}',
+            ),
+            _Meta(icon: Icons.location_on_rounded, label: circle.locationDisplay),
+            if (founder != null) _Meta(icon: Icons.workspace_premium_rounded, label: 'Fondé par $founder'),
+          ],
+        ),
+        if (circle.description.isNotEmpty) ...[
+          const SizedBox(height: 8),
+          Text(circle.description,
+              maxLines: 3,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(color: VoyagoColors.muted, fontSize: 13, height: 1.4)),
+        ],
+        const SizedBox(height: 6),
+        const Text(
+          '🔒 Voyages, moments et membres visibles une fois dans la tribu.',
+          style: TextStyle(color: VoyagoColors.muted, fontSize: 11.5),
         ),
       ],
     );
@@ -580,6 +567,155 @@ class _Meta extends StatelessWidget {
         const SizedBox(width: 4),
         Text(label, style: const TextStyle(color: VoyagoColors.muted, fontSize: 12.5, fontWeight: FontWeight.w600)),
       ],
+    );
+  }
+}
+
+/// Rejoindre avec un code d'invitation (refus éventuel affiché dans une belle fenêtre).
+Future<void> joinCircleWithCode(BuildContext context, WidgetRef ref) async {
+  final messenger = ScaffoldMessenger.of(context);
+  final router = GoRouter.of(context);
+  if (ref.read(currentUserProvider) == null) {
+    messenger.showSnackBar(const SnackBar(
+      backgroundColor: VoyagoColors.orange,
+      content: Text('Connecte-toi pour rejoindre un cercle'),
+    ));
+    return;
+  }
+  final code = await showDialog<String>(context: context, builder: (_) => const _InviteCodeDialog());
+  if (code == null || code.trim().isEmpty || !context.mounted) return;
+  try {
+    final circleId = await ref.read(communityControllerProvider).joinCircleByCode(code);
+    messenger.showSnackBar(const SnackBar(
+      backgroundColor: VoyagoColors.primary,
+      content: Text('🎉 Bienvenue dans ta nouvelle tribu !'),
+    ));
+    if (circleId.isNotEmpty) router.go('/circle/$circleId');
+  } on ApiException catch (e) {
+    if (!context.mounted) return;
+    if (!await showJoinRefusalIfNeeded(context, e)) {
+      messenger.showSnackBar(SnackBar(backgroundColor: VoyagoColors.coral, content: Text(e.message)));
+    }
+  }
+}
+
+// =============================================================================
+// Refus d'entrée : fenêtre claire (mineurs, places, niveau...)
+// =============================================================================
+
+/// Conseil adapté à ce qui manque pour entrer.
+String refusalAdvice(List<JoinCheck> checks) {
+  final failed = checks.where((c) => c.ok == false).map((c) => c.key).toSet();
+  if (failed.contains('min_age')) {
+    return "Ce cercle est réservé aux voyageurs plus âgés. Ta sécurité compte : d'autres tribus t'attendent dans la communauté !";
+  }
+  if (failed.contains('max_members')) return 'Ce cercle est complet pour le moment. Repasse plus tard, une place se libérera peut-être !';
+  if (failed.contains('min_level')) return "Gagne de l'XP en voyageant, en notant des lieux et en partageant tes aventures… et reviens !";
+  if (failed.contains('verified_email')) return 'Vérifie ton adresse e-mail depuis ton profil, puis renvoie ta demande.';
+  if (failed.contains('pro_only')) return 'Ce cercle est réservé aux membres Voyagooo Pro.';
+  return "Tu ne remplis pas encore toutes les conditions d'accès de ce cercle.";
+}
+
+/// Affiche la fenêtre de refus si l'erreur vient des conditions d'accès. Renvoie true si affichée.
+Future<bool> showJoinRefusalIfNeeded(BuildContext context, Object error) async {
+  if (error is! ApiException) return false;
+  final details = error.details;
+  if (details is! Map || details['code'] != 'JOIN_CONDITIONS') return false;
+  final checks = JoinCheck.listFrom(details['join_checks']);
+  final underAge = details['under_age'] == true;
+  final circleName = details['circle_name']?.toString();
+  await showDialog<void>(
+    context: context,
+    builder: (ctx) => _JoinRefusalDialog(
+      underAge: underAge,
+      circleName: circleName,
+      message: error.message,
+      checks: checks,
+    ),
+  );
+  return true;
+}
+
+class _JoinRefusalDialog extends StatelessWidget {
+  final bool underAge;
+  final String? circleName;
+  final String message;
+  final List<JoinCheck> checks;
+
+  const _JoinRefusalDialog({required this.underAge, this.circleName, required this.message, required this.checks});
+
+  @override
+  Widget build(BuildContext context) {
+    final failed = checks.where((c) => c.ok == false).toList();
+    final accent = underAge ? VoyagoColors.orange : VoyagoColors.coral;
+    return Dialog(
+      backgroundColor: VoyagoColors.surface,
+      insetPadding: const EdgeInsets.symmetric(horizontal: 28),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(28)),
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(22, 26, 22, 18),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TweenAnimationBuilder<double>(
+              tween: Tween(begin: 0.6, end: 1),
+              duration: const Duration(milliseconds: 500),
+              curve: Curves.elasticOut,
+              builder: (_, scale, child) => Transform.scale(scale: scale, child: child),
+              child: Container(
+                width: 84,
+                height: 84,
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: accent.withValues(alpha: 0.14),
+                  border: Border.all(color: accent.withValues(alpha: 0.45), width: 2),
+                ),
+                child: Text(underAge ? '🔞' : '🔒', style: const TextStyle(fontSize: 38)),
+              ),
+            ),
+            const SizedBox(height: 16),
+            Text(
+              underAge ? 'Réservé aux majeurs' : 'Accès impossible pour le moment',
+              textAlign: TextAlign.center,
+              style: const TextStyle(color: VoyagoColors.text, fontSize: 19, fontWeight: FontWeight.w800),
+            ),
+            if (circleName != null) ...[
+              const SizedBox(height: 4),
+              Text('« $circleName »',
+                  textAlign: TextAlign.center, style: const TextStyle(color: VoyagoColors.muted, fontSize: 13)),
+            ],
+            const SizedBox(height: 12),
+            Text(
+              underAge
+                  ? "$message. Même avec un code d'invitation, l'âge minimum s'applique pour protéger tous les voyageurs."
+                  : refusalAdvice(checks),
+              textAlign: TextAlign.center,
+              style: const TextStyle(color: VoyagoColors.text, fontSize: 13.5, height: 1.45),
+            ),
+            if (failed.isNotEmpty && !underAge) ...[
+              const SizedBox(height: 14),
+              for (final c in failed) _CheckRow(check: c),
+            ],
+            const SizedBox(height: 14),
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton(
+                onPressed: () => Navigator.pop(context),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: VoyagoColors.primary,
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(vertical: 13),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                  elevation: 0,
+                ),
+                child: Text(underAge ? "D'accord, j'explore ailleurs" : 'Compris',
+                    style: const TextStyle(fontWeight: FontWeight.w800)),
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }
@@ -645,16 +781,21 @@ class CircleAccessManagerCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
+          const Row(
             children: [
-              const Icon(Icons.admin_panel_settings_rounded, size: 18, color: VoyagoColors.yellow),
-              const SizedBox(width: 8),
-              const Expanded(
+              Icon(Icons.admin_panel_settings_rounded, size: 18, color: VoyagoColors.yellow),
+              SizedBox(width: 8),
+              Expanded(
                 child: Text('Accès à ta tribu',
                     style: TextStyle(color: VoyagoColors.text, fontSize: 14, fontWeight: FontWeight.w800)),
               ),
-              if (!circle.joinRules.isEmpty) JoinRuleChips(rules: circle.joinRules),
             ],
+          ),
+          const SizedBox(height: 10),
+          InkWell(
+            borderRadius: BorderRadius.circular(12),
+            onTap: () => showCircleAccessSettingsSheet(context, circle),
+            child: _QuotaBar(members: circle.membersCount, quota: circle.joinRules.maxMembers),
           ),
           const SizedBox(height: 12),
           Row(
@@ -679,6 +820,56 @@ class CircleAccessManagerCard extends StatelessWidget {
               ),
             ],
           ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Quota de membres : jauge (quota fixé) ou « libre ».
+class _QuotaBar extends StatelessWidget {
+  final int members;
+  final int? quota;
+
+  const _QuotaBar({required this.members, this.quota});
+
+  @override
+  Widget build(BuildContext context) {
+    final q = quota;
+    final ratio = q == null || q == 0 ? 0.0 : (members / q).clamp(0.0, 1.0);
+    final color = ratio >= 1 ? VoyagoColors.coral : (ratio >= 0.8 ? VoyagoColors.orange : VoyagoColors.primary);
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Icon(Icons.groups_rounded, size: 16, color: VoyagoColors.muted),
+              const SizedBox(width: 6),
+              Expanded(
+                child: Text(
+                  q == null
+                      ? '$members membre${members > 1 ? 's' : ''} · quota libre'
+                      : '$members / $q membres${members >= q ? ' · complet' : ' · ${q - members} place${q - members > 1 ? 's' : ''}'}',
+                  style: const TextStyle(color: VoyagoColors.text, fontSize: 12.5, fontWeight: FontWeight.w600),
+                ),
+              ),
+              const Icon(Icons.edit_rounded, size: 14, color: VoyagoColors.muted),
+            ],
+          ),
+          if (q != null) ...[
+            const SizedBox(height: 6),
+            ClipRRect(
+              borderRadius: BorderRadius.circular(4),
+              child: LinearProgressIndicator(
+                value: ratio,
+                minHeight: 5,
+                backgroundColor: VoyagoColors.cardBorder,
+                valueColor: AlwaysStoppedAnimation(color),
+              ),
+            ),
+          ],
         ],
       ),
     );
@@ -1051,6 +1242,11 @@ class _AccessSettingsSheetState extends ConsumerState<_AccessSettingsSheet> {
   static const _ages = [null, 16, 18, 21, 25, 30, 40];
   static const _places = [null, 5, 10, 15, 20, 30, 50, 100];
 
+  /// Valeur « Personnalisé… » de la liste des quotas (jamais envoyée au serveur)
+  static const _customQuota = -1;
+
+  Future<int?> _askCustomQuota() => showDialog<int>(context: context, builder: (_) => const _CustomQuotaDialog());
+
   late JoinRules _rules = widget.circle.joinRules;
   late bool _autoApprove = widget.circle.autoApprove;
   late bool _listed = widget.circle.listed;
@@ -1138,12 +1334,32 @@ class _AccessSettingsSheetState extends ConsumerState<_AccessSettingsSheet> {
                 ),
                 _SelectRow<int?>(
                   icon: Icons.event_seat_rounded,
-                  label: 'Nombre de places',
+                  label: 'Quota de membres',
                   value: _rules.maxMembers,
-                  options: _places,
-                  display: (v) => v == null ? 'Illimité' : '$v membres max.',
-                  onChanged: (v) => setState(() => _rules = _rules.copyWith(maxMembers: () => v)),
+                  options: const [..._places, _customQuota],
+                  display: (v) => v == null
+                      ? 'Libre'
+                      : v == _customQuota
+                          ? 'Personnalisé…'
+                          : '$v max.',
+                  onChanged: (v) async {
+                    if (v == _customQuota) {
+                      final custom = await _askCustomQuota();
+                      if (custom != null) setState(() => _rules = _rules.copyWith(maxMembers: () => custom));
+                    } else {
+                      setState(() => _rules = _rules.copyWith(maxMembers: () => v));
+                    }
+                  },
                 ),
+                if (_rules.maxMembers != null && _rules.maxMembers! < widget.circle.membersCount)
+                  Padding(
+                    padding: const EdgeInsets.only(left: 4, bottom: 10),
+                    child: Text(
+                      'Le cercle compte déjà ${widget.circle.membersCount} membres : personne n\'est retiré, '
+                      'mais plus aucune entrée tant qu\'il y a plus de ${_rules.maxMembers} membres.',
+                      style: const TextStyle(color: VoyagoColors.orange, fontSize: 11.5, height: 1.35),
+                    ),
+                  ),
                 _SwitchRow(
                   icon: Icons.workspace_premium_rounded,
                   label: 'Réservé aux membres Pro',
@@ -1211,6 +1427,58 @@ class _AccessSettingsSheetState extends ConsumerState<_AccessSettingsSheet> {
           ),
         ),
       ),
+    );
+  }
+}
+
+class _CustomQuotaDialog extends StatefulWidget {
+  const _CustomQuotaDialog();
+
+  @override
+  State<_CustomQuotaDialog> createState() => _CustomQuotaDialogState();
+}
+
+class _CustomQuotaDialogState extends State<_CustomQuotaDialog> {
+  final _controller = TextEditingController();
+  String? _error;
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  void _submit() {
+    final value = int.tryParse(_controller.text.trim());
+    if (value == null || value < 2 || value > 10000) {
+      setState(() => _error = 'Entre un nombre entre 2 et 10 000');
+      return;
+    }
+    Navigator.pop(context, value);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      backgroundColor: VoyagoColors.surface,
+      title: const Text('Quota de membres', style: TextStyle(color: VoyagoColors.text)),
+      content: TextField(
+        controller: _controller,
+        autofocus: true,
+        keyboardType: TextInputType.number,
+        style: const TextStyle(color: VoyagoColors.text, fontSize: 18, fontWeight: FontWeight.w700),
+        decoration: InputDecoration(
+          hintText: 'Ex : 12',
+          hintStyle: const TextStyle(color: VoyagoColors.muted),
+          suffixText: 'membres max.',
+          errorText: _error,
+        ),
+        onSubmitted: (_) => _submit(),
+      ),
+      actions: [
+        TextButton(onPressed: () => Navigator.pop(context), child: const Text('Annuler')),
+        TextButton(onPressed: _submit, child: const Text('Valider')),
+      ],
     );
   }
 }
@@ -1293,6 +1561,287 @@ class _SwitchRow extends StatelessWidget {
             Switch(value: value, activeThumbColor: VoyagoColors.primary, onChanged: onChanged),
           ],
         ),
+      ),
+    );
+  }
+}
+
+// =============================================================================
+// Membres du cercle (réservé aux membres) : profils + gestion par le fondateur
+// =============================================================================
+
+Future<void> showCircleMembersSheet(BuildContext context, CommunityCircle circle) {
+  return showModalBottomSheet<void>(
+    context: context,
+    isScrollControlled: true,
+    backgroundColor: Colors.transparent,
+    builder: (_) => DraggableScrollableSheet(
+      initialChildSize: 0.8,
+      minChildSize: 0.5,
+      maxChildSize: 0.95,
+      expand: false,
+      builder: (_, scroll) => _CircleMembersSheet(circle: circle, scrollController: scroll),
+    ),
+  );
+}
+
+class _CircleMembersSheet extends ConsumerStatefulWidget {
+  final CommunityCircle circle;
+  final ScrollController scrollController;
+
+  const _CircleMembersSheet({required this.circle, required this.scrollController});
+
+  @override
+  ConsumerState<_CircleMembersSheet> createState() => _CircleMembersSheetState();
+}
+
+class _CircleMembersSheetState extends ConsumerState<_CircleMembersSheet> {
+  final List<CircleMember> _members = [];
+  int _total = 0;
+  int? _quota;
+  String? _myRole;
+  bool _hasMore = true;
+  bool _loading = false;
+  String? _error;
+
+  @override
+  void initState() {
+    super.initState();
+    widget.scrollController.addListener(_onScroll);
+    _loadMore();
+  }
+
+  @override
+  void dispose() {
+    widget.scrollController.removeListener(_onScroll);
+    super.dispose();
+  }
+
+  void _onScroll() {
+    final position = widget.scrollController.position;
+    if (position.pixels > position.maxScrollExtent - 300) _loadMore();
+  }
+
+  Future<void> _loadMore() async {
+    if (_loading || !_hasMore) return;
+    setState(() => _loading = true);
+    try {
+      final page = await ref.read(communityApiProvider).getCircleMembers(widget.circle.id, skip: _members.length);
+      if (!mounted) return;
+      setState(() {
+        _members.addAll(page.members);
+        _total = page.total;
+        _quota = page.maxMembers;
+        _myRole = page.myRole;
+        _hasMore = page.hasMore && page.members.isNotEmpty;
+        _loading = false;
+        _error = null;
+      });
+    } on ApiException catch (e) {
+      if (mounted) {
+        setState(() {
+          _loading = false;
+          _error = e.message;
+        });
+      }
+    }
+  }
+
+  bool _canManage(CircleMember m) {
+    if (m.isCreator || _myRole == null) return false;
+    if (_myRole == 'creator') return true;
+    return _myRole == 'admin' && !m.isAdmin;
+  }
+
+  Future<void> _manage(CircleMember m) async {
+    final messenger = ScaffoldMessenger.of(context);
+    final action = await showModalBottomSheet<String>(
+      context: context,
+      backgroundColor: VoyagoColors.surface,
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
+      builder: (ctx) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const SizedBox(height: 8),
+            ListTile(
+              leading: const Icon(Icons.person_rounded, color: VoyagoColors.primary),
+              title: Text('Voir le profil de ${m.displayName}', style: const TextStyle(color: VoyagoColors.text)),
+              onTap: () => Navigator.pop(ctx, 'profile'),
+            ),
+            if (_myRole == 'creator')
+              ListTile(
+                leading: Icon(m.isAdmin ? Icons.remove_moderator_rounded : Icons.add_moderator_rounded,
+                    color: VoyagoColors.yellow),
+                title: Text(m.isAdmin ? "Retirer le rôle d'admin" : 'Nommer admin',
+                    style: const TextStyle(color: VoyagoColors.text)),
+                subtitle: const Text('Les admins acceptent les demandes et gèrent les conditions',
+                    style: TextStyle(color: VoyagoColors.muted, fontSize: 12)),
+                onTap: () => Navigator.pop(ctx, 'role'),
+              ),
+            ListTile(
+              leading: const Icon(Icons.person_remove_rounded, color: VoyagoColors.coral),
+              title: const Text('Retirer du cercle', style: TextStyle(color: VoyagoColors.coral)),
+              onTap: () => Navigator.pop(ctx, 'remove'),
+            ),
+            const SizedBox(height: 8),
+          ],
+        ),
+      ),
+    );
+    if (!mounted || action == null) return;
+    if (action == 'profile') {
+      context.push('/user/${m.userId}');
+      return;
+    }
+    if (action == 'remove') {
+      final ok = await showDialog<bool>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          backgroundColor: VoyagoColors.surface,
+          title: Text('Retirer ${m.displayName} ?', style: const TextStyle(color: VoyagoColors.text)),
+          content: const Text('Il ne verra plus le contenu du cercle. Il pourra redemander à le rejoindre.',
+              style: TextStyle(color: VoyagoColors.muted)),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Annuler')),
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, true),
+              child: const Text('Retirer', style: TextStyle(color: VoyagoColors.coral)),
+            ),
+          ],
+        ),
+      );
+      if (ok != true) return;
+    }
+    try {
+      final controller = ref.read(communityControllerProvider);
+      if (action == 'remove') {
+        await controller.removeCircleMember(widget.circle.id, m.userId);
+        setState(() {
+          _members.removeWhere((x) => x.userId == m.userId);
+          _total = (_total - 1).clamp(0, 1 << 30);
+        });
+        messenger.showSnackBar(SnackBar(content: Text('${m.displayName} a été retiré du cercle')));
+      } else {
+        final role = m.isAdmin ? 'explorer' : 'admin';
+        await controller.setCircleMemberRole(widget.circle.id, m.userId, role);
+        setState(() {
+          final i = _members.indexWhere((x) => x.userId == m.userId);
+          if (i >= 0) _members[i] = m.withRole(role);
+        });
+        messenger.showSnackBar(SnackBar(
+          backgroundColor: VoyagoColors.primary,
+          content: Text(role == 'admin' ? '⭐ ${m.displayName} est maintenant admin' : '${m.displayName} n\'est plus admin'),
+        ));
+      }
+    } on ApiException catch (e) {
+      messenger.showSnackBar(SnackBar(backgroundColor: VoyagoColors.coral, content: Text(e.message)));
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      decoration: const BoxDecoration(
+        color: VoyagoColors.background,
+        borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+      ),
+      child: Column(
+        children: [
+          const SizedBox(height: 12),
+          Container(
+            width: 40,
+            height: 4,
+            decoration: BoxDecoration(color: VoyagoColors.cardBorder, borderRadius: BorderRadius.circular(2)),
+          ),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(20, 14, 20, 8),
+            child: Row(
+              children: [
+                const Text('👥', style: TextStyle(fontSize: 18)),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    _quota != null ? 'Membres · $_total / $_quota' : 'Membres · $_total',
+                    style: const TextStyle(color: VoyagoColors.text, fontSize: 17, fontWeight: FontWeight.w800),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          Expanded(
+            child: _error != null && _members.isEmpty
+                ? Center(child: Text(_error!, style: const TextStyle(color: VoyagoColors.muted)))
+                : ListView.builder(
+                    controller: widget.scrollController,
+                    padding: const EdgeInsets.fromLTRB(12, 0, 12, 32),
+                    itemCount: _members.length + (_hasMore ? 1 : 0),
+                    itemBuilder: (_, i) {
+                      if (i >= _members.length) {
+                        return const Padding(
+                          padding: EdgeInsets.all(20),
+                          child: Center(child: CircularProgressIndicator(color: VoyagoColors.primary, strokeWidth: 2)),
+                        );
+                      }
+                      final m = _members[i];
+                      final manageable = _canManage(m);
+                      return ListTile(
+                        onTap: () => context.push('/user/${m.userId}'),
+                        onLongPress: manageable ? () => _manage(m) : null,
+                        contentPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                        leading: CircleAvatar(
+                          radius: 22,
+                          backgroundColor: VoyagoColors.surface,
+                          backgroundImage:
+                              m.picture != null && m.picture!.isNotEmpty ? CachedNetworkImageProvider(m.picture!) : null,
+                          child: m.picture != null && m.picture!.isNotEmpty
+                              ? null
+                              : Text(m.avatarEmoji, style: const TextStyle(fontSize: 20)),
+                        ),
+                        title: Row(
+                          children: [
+                            Flexible(
+                              child: Text(m.displayName,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: const TextStyle(color: VoyagoColors.text, fontWeight: FontWeight.w700)),
+                            ),
+                            if (m.emailVerified) ...[
+                              const SizedBox(width: 4),
+                              const Icon(Icons.verified_rounded, size: 14, color: VoyagoColors.blue),
+                            ],
+                            if (m.isCreator || m.isAdmin) ...[
+                              const SizedBox(width: 6),
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
+                                decoration: BoxDecoration(
+                                  color: VoyagoColors.yellow.withValues(alpha: 0.15),
+                                  borderRadius: BorderRadius.circular(6),
+                                ),
+                                child: Text(m.isCreator ? '👑 Fondateur' : '⭐ Admin',
+                                    style: const TextStyle(color: VoyagoColors.yellow, fontSize: 10, fontWeight: FontWeight.w800)),
+                              ),
+                            ],
+                          ],
+                        ),
+                        subtitle: Text(
+                          [
+                            'Niveau ${m.level}',
+                            if (m.isPro) 'Pro',
+                            if (m.country != null && m.country!.isNotEmpty) m.country!,
+                          ].join(' · '),
+                          style: const TextStyle(color: VoyagoColors.muted, fontSize: 12),
+                        ),
+                        trailing: manageable
+                            ? IconButton(
+                                icon: const Icon(Icons.more_vert_rounded, color: VoyagoColors.muted),
+                                onPressed: () => _manage(m),
+                              )
+                            : const Icon(Icons.chevron_right_rounded, color: VoyagoColors.muted),
+                      );
+                    },
+                  ),
+          ),
+        ],
       ),
     );
   }
