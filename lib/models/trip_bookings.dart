@@ -183,6 +183,7 @@ class FlightOffer {
   final int transfers;
   final int? returnTransfers;
   final int? durationTo;
+  final int? duration;
   final int? saving;
   final String link;
 
@@ -194,6 +195,7 @@ class FlightOffer {
     this.transfers = 0,
     this.returnTransfers,
     this.durationTo,
+    this.duration,
     this.saving,
     required this.link,
   });
@@ -206,7 +208,50 @@ class FlightOffer {
         transfers: _int(j['transfers']),
         returnTransfers: _intOrNull(j['return_transfers']),
         durationTo: _intOrNull(j['duration_to']),
+        duration: _intOrNull(j['duration']),
         saving: _intOrNull(j['saving']),
+        link: '${j['link'] ?? ''}',
+      );
+}
+
+/// Un repère du comparatif de vols : le moins cher, direct, le plus rapide, le meilleur rapport
+class FlightHighlight {
+  final String kind;
+  final FlightOffer offer;
+
+  const FlightHighlight({required this.kind, required this.offer});
+}
+
+/// Un jour de départ voisin (± 3 jours) ou un aéroport proche, avec l'économie pour le groupe
+class FlightAlternative {
+  final String? origin;
+  final String? destination;
+  final String departure;
+  final String? returnDate;
+  final int price;
+  final int? saving;
+  final int transfers;
+  final String link;
+
+  const FlightAlternative({
+    this.origin,
+    this.destination,
+    required this.departure,
+    this.returnDate,
+    required this.price,
+    this.saving,
+    this.transfers = 0,
+    required this.link,
+  });
+
+  factory FlightAlternative.fromJson(Map<String, dynamic> j) => FlightAlternative(
+        origin: _str(j['origin']),
+        destination: _str(j['destination']),
+        departure: '${j['departure'] ?? ''}',
+        returnDate: _str(j['return']),
+        price: _int(j['price']),
+        saving: _intOrNull(j['saving']),
+        transfers: _int(j['transfers']),
         link: '${j['link'] ?? ''}',
       );
 }
@@ -224,6 +269,13 @@ class TransportOption {
   final List<FlightOffer> offers;
   final List<FlightOffer> cheaperDates;
   final List<PartnerChoice> choices;
+  final List<FlightHighlight> highlights;
+  final List<FlightAlternative> flexible;
+  final List<FlightAlternative> nearby;
+  /// good | average | high : le meilleur prix face aux prix du mois
+  final String? priceVerdict;
+  final int? monthMedian;
+  final int passengers;
 
   const TransportOption({
     required this.kind,
@@ -237,6 +289,12 @@ class TransportOption {
     this.offers = const [],
     this.cheaperDates = const [],
     this.choices = const [],
+    this.highlights = const [],
+    this.flexible = const [],
+    this.nearby = const [],
+    this.priceVerdict,
+    this.monthMedian,
+    this.passengers = 1,
   });
 
   factory TransportOption.fromJson(Map<String, dynamic> j) => TransportOption(
@@ -251,6 +309,105 @@ class TransportOption {
         offers: _list(j['offers']).map(FlightOffer.fromJson).toList(),
         cheaperDates: _list(j['cheaper_dates']).map(FlightOffer.fromJson).toList(),
         choices: _choices(j['choices']),
+        highlights: _list(j['highlights'])
+            .where((h) => h['offer'] is Map)
+            .map((h) => FlightHighlight(
+                  kind: '${h['kind'] ?? ''}',
+                  offer: FlightOffer.fromJson(Map<String, dynamic>.from(h['offer'] as Map)),
+                ))
+            .toList(),
+        flexible: _list(j['flexible']).map(FlightAlternative.fromJson).toList(),
+        nearby: _list(j['nearby']).map(FlightAlternative.fromJson).toList(),
+        priceVerdict: _str(_map(j['insight'])?['verdict']),
+        monthMedian: _intOrNull(_map(j['insight'])?['median']),
+        passengers: _int(j['passengers'] ?? 1),
+      );
+}
+
+/// Pass touristique comparé aux billets à l'unité
+class PassCompare {
+  final String name;
+  final int priceGroup;
+  final List<String> covers;
+  final int individualTotal;
+  final int saving;
+  final bool worthIt;
+  final String? tip;
+
+  const PassCompare({
+    required this.name,
+    required this.priceGroup,
+    required this.covers,
+    required this.individualTotal,
+    required this.saving,
+    required this.worthIt,
+    this.tip,
+  });
+
+  factory PassCompare.fromJson(Map<String, dynamic> j) => PassCompare(
+        name: '${j['name'] ?? ''}',
+        priceGroup: _int(j['price_group']),
+        covers: (j['covers'] as List?)?.map((e) => '$e').toList() ?? const [],
+        individualTotal: _int(j['individual_total']),
+        saving: _int(j['saving']),
+        worthIt: j['worth_it'] == true,
+        tip: _str(j['tip']),
+      );
+}
+
+/// Une économie possible, avec l'onglet où la concrétiser
+class PlanSaving {
+  final String kind;
+  final String title;
+  final String detail;
+  final int amount;
+  final int tab;
+
+  const PlanSaving({required this.kind, required this.title, required this.detail, required this.amount, required this.tab});
+
+  factory PlanSaving.fromJson(Map<String, dynamic> j) => PlanSaving(
+        kind: '${j['kind'] ?? ''}',
+        title: '${j['title'] ?? ''}',
+        detail: '${j['detail'] ?? ''}',
+        amount: _int(j['amount']),
+        tab: _int(j['tab']),
+      );
+}
+
+/// Le meilleur plan : coût estimé sur place, vols et économies classées
+class TripPlan {
+  final int costOnSite;
+  final int budgetTotal;
+  final bool fits;
+  final int gap;
+  final int? flightsGroup;
+  final int? totalWithFlights;
+  final List<PlanSaving> savings;
+  final List<String> moneyTips;
+  final String? bookingWindow;
+
+  const TripPlan({
+    required this.costOnSite,
+    required this.budgetTotal,
+    required this.fits,
+    required this.gap,
+    this.flightsGroup,
+    this.totalWithFlights,
+    this.savings = const [],
+    this.moneyTips = const [],
+    this.bookingWindow,
+  });
+
+  factory TripPlan.fromJson(Map<String, dynamic> j) => TripPlan(
+        costOnSite: _int(j['cost_on_site']),
+        budgetTotal: _int(j['budget_total']),
+        fits: j['fits'] == true,
+        gap: _int(j['gap']),
+        flightsGroup: _intOrNull(j['flights_group']),
+        totalWithFlights: _intOrNull(j['total_with_flights']),
+        savings: _list(j['savings']).map(PlanSaving.fromJson).toList(),
+        moneyTips: (j['money_tips'] as List?)?.map((e) => '$e').toList() ?? const [],
+        bookingWindow: _str(j['booking_window']),
       );
 }
 
@@ -382,6 +539,8 @@ class TripBookings {
   final List<TransportOption> transport;
   final List<ActivityProposal> activities;
   final List<BookedItem> bookings;
+  final PassCompare? passCompare;
+  final TripPlan? plan;
   final bool estimatesAvailable;
 
   const TripBookings({
@@ -402,6 +561,8 @@ class TripBookings {
     required this.transport,
     required this.activities,
     required this.bookings,
+    this.passCompare,
+    this.plan,
     required this.estimatesAvailable,
   });
 
@@ -427,6 +588,8 @@ class TripBookings {
       transport: _list(j['transport']).map(TransportOption.fromJson).toList(),
       activities: _list(j['activities']).map(ActivityProposal.fromJson).toList(),
       bookings: _list(j['bookings']).map(BookedItem.fromJson).toList(),
+      passCompare: _map(j['pass_compare']) == null ? null : PassCompare.fromJson(_map(j['pass_compare'])!),
+      plan: _map(j['plan']) == null ? null : TripPlan.fromJson(_map(j['plan'])!),
       estimatesAvailable: j['estimates_available'] == true,
     );
   }

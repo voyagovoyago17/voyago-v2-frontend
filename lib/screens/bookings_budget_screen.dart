@@ -185,6 +185,17 @@ class _BookingsBudgetScreenState extends ConsumerState<BookingsBudgetScreen> {
                     padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
                     sliver: SliverList.list(children: [
                       _BudgetCard(data: data, fmt: _fmt),
+                      if (data.plan != null) ...[
+                        const SizedBox(height: 12),
+                        _PlanCard(
+                          plan: data.plan!,
+                          fmt: _fmt,
+                          onSaving: (tab) {
+                            HapticFeedback.selectionClick();
+                            setState(() => _tab = tab);
+                          },
+                        ),
+                      ],
                       if (!data.datesKnown) ...[
                         const SizedBox(height: 12),
                         const _InfoBanner(
@@ -326,7 +337,8 @@ class _BookingsBudgetScreenState extends ConsumerState<BookingsBudgetScreen> {
                     ? 'Tes visites sont gratuites ou se paient sur place. Profite !'
                     : 'Estimations indisponibles pour le moment. Tire vers le bas pour réessayer.',
               )
-            else
+            else ...[
+              if (data.passCompare != null) _PassCard(pass: data.passCompare!, fmt: _fmt),
               for (final a in data.activities)
                 _ActivityCard(
                   activity: a,
@@ -334,6 +346,7 @@ class _BookingsBudgetScreenState extends ConsumerState<BookingsBudgetScreen> {
                   travelers: data.travelersCount,
                   onChoice: (c) => _openChoice(c, category: 'activities', label: a.name, amount: a.priceGroup),
                 ),
+            ],
             const _PriceDisclaimer(),
           ]),
         ];
@@ -1860,6 +1873,27 @@ class _FlightCard extends StatelessWidget {
 
   static String _stops(int n) => n == 0 ? 'Direct' : '$n escale${n > 1 ? 's' : ''}';
 
+  /// Repères du comparatif, une ligne par offre (une offre peut cumuler plusieurs titres)
+  List<({List<String> labels, FlightOffer offer})> _rows() {
+    if (option.highlights.isEmpty) return [for (final o in option.offers.take(3)) (labels: const <String>[], offer: o)];
+    final rows = <({List<String> labels, FlightOffer offer})>[];
+    for (final h in option.highlights) {
+      final label = switch (h.kind) {
+        'cheapest' => 'Le moins cher',
+        'direct' => 'Direct',
+        'fastest' => 'Le plus rapide',
+        _ => 'Meilleur rapport',
+      };
+      final i = rows.indexWhere((r) => r.offer.link == h.offer.link && r.offer.price == h.offer.price);
+      if (i >= 0) {
+        rows[i].labels.add(label);
+      } else {
+        rows.add((labels: [label], offer: h.offer));
+      }
+    }
+    return rows;
+  }
+
   @override
   Widget build(BuildContext context) {
     return _Card(
@@ -1900,58 +1934,22 @@ class _FlightCard extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 10),
+          if (option.priceVerdict != null) ...[
+            _PriceVerdict(verdict: option.priceVerdict!, median: option.monthMedian, fmt: fmt),
+            const SizedBox(height: 8),
+          ],
           if (option.offers.isEmpty)
             const Text(
               'Pas encore de tarif relevé pour ces dates exactes : compare en direct ci-dessous.',
               style: TextStyle(color: VoyagoColors.muted, fontSize: 12.5),
             )
           else
-            for (final o in option.offers)
-              Material(
-                color: VoyagoColors.background,
-                borderRadius: BorderRadius.circular(14),
-                child: InkWell(
-                  borderRadius: BorderRadius.circular(14),
-                  onTap: () => onOpen(o.link, option.price),
-                  child: Padding(
-                    padding: const EdgeInsets.all(10),
-                    child: Row(
-                      children: [
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(o.airline ?? 'Compagnie',
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: const TextStyle(color: VoyagoColors.text, fontSize: 13.5, fontWeight: FontWeight.w800)),
-                              const SizedBox(height: 2),
-                              Text(
-                                [
-                                  if (_time(o.departureAt).isNotEmpty) 'Départ ${_time(o.departureAt)}',
-                                  _stops(o.transfers),
-                                  if (o.returnTransfers != null && o.returnTransfers != o.transfers)
-                                    'retour ${_stops(o.returnTransfers!).toLowerCase()}',
-                                ].join(' · '),
-                                style: const TextStyle(color: VoyagoColors.muted, fontSize: 11.5),
-                              ),
-                            ],
-                          ),
-                        ),
-                        Column(
-                          crossAxisAlignment: CrossAxisAlignment.end,
-                          children: [
-                            Text(fmt(o.price),
-                                style: const TextStyle(color: VoyagoColors.text, fontSize: 16, fontWeight: FontWeight.w900)),
-                            const Text('/pers. A/R', style: TextStyle(color: VoyagoColors.muted, fontSize: 10.5)),
-                          ],
-                        ),
-                        const SizedBox(width: 6),
-                        const Icon(Icons.chevron_right_rounded, color: VoyagoColors.muted),
-                      ],
-                    ),
-                  ),
-                ),
+            for (final row in _rows())
+              _FlightOfferRow(
+                labels: row.labels,
+                offer: row.offer,
+                fmt: fmt,
+                onTap: () => onOpen(row.offer.link, row.offer.price * option.passengers),
               ),
           if (option.price != null && option.offers.isNotEmpty)
             Padding(
@@ -2002,6 +2000,21 @@ class _FlightCard extends StatelessWidget {
                 ],
               ),
             ),
+          ],
+          if (option.flexible.length > 1) ...[
+            const SizedBox(height: 12),
+            const Text('📅 ± 3 jours autour de ton départ',
+                style: TextStyle(color: VoyagoColors.text, fontSize: 13, fontWeight: FontWeight.w800)),
+            const SizedBox(height: 6),
+            _FlexibleDates(days: option.flexible, fmt: fmt, onTap: (d) => onOpen(d.link, d.price * option.passengers)),
+          ],
+          if (option.nearby.isNotEmpty) ...[
+            const SizedBox(height: 12),
+            const Text('🛫 Aéroports proches moins chers',
+                style: TextStyle(color: VoyagoColors.text, fontSize: 13, fontWeight: FontWeight.w800)),
+            const SizedBox(height: 6),
+            for (final n in option.nearby)
+              _NearbyRow(alt: n, fmt: fmt, onTap: () => onOpen(n.link, n.price * option.passengers)),
           ],
           const SizedBox(height: 12),
           Row(
@@ -2264,6 +2277,480 @@ class _StayOptionTile extends StatelessWidget {
               ],
             ),
           ],
+        ],
+      ),
+    );
+  }
+}
+
+// =============================================================================
+// Comparatif : meilleur plan, vols, pass
+// =============================================================================
+
+/// « Ton meilleur plan » : coût estimé face au budget, économies classées, astuces locales
+class _PlanCard extends StatelessWidget {
+  final TripPlan plan;
+  final String Function(num) fmt;
+  final ValueChanged<int> onSaving;
+
+  const _PlanCard({required this.plan, required this.fmt, required this.onSaving});
+
+  @override
+  Widget build(BuildContext context) {
+    final color = plan.fits ? VoyagoColors.primary : VoyagoColors.orange;
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [color.withValues(alpha: 0.16), VoyagoColors.surface],
+        ),
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(color: color.withValues(alpha: 0.4)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Text('🧭', style: TextStyle(fontSize: 26)),
+              const SizedBox(width: 10),
+              const Expanded(
+                child: Text('Ton meilleur plan',
+                    style: TextStyle(color: VoyagoColors.text, fontSize: 17, fontWeight: FontWeight.w900)),
+              ),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
+                decoration: BoxDecoration(color: color.withValues(alpha: 0.18), borderRadius: BorderRadius.circular(10)),
+                child: Text(
+                  plan.fits ? 'Dans ton budget' : 'Dépasse de ${fmt(plan.gap)}',
+                  style: TextStyle(color: color, fontSize: 11.5, fontWeight: FontWeight.w900),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          Text.rich(
+            TextSpan(
+              style: const TextStyle(color: VoyagoColors.muted, fontSize: 13, height: 1.4),
+              children: [
+                const TextSpan(text: 'Sur place '),
+                TextSpan(
+                  text: '~${fmt(plan.costOnSite)}',
+                  style: const TextStyle(color: VoyagoColors.text, fontWeight: FontWeight.w900),
+                ),
+                TextSpan(text: ' pour un budget de ${fmt(plan.budgetTotal)}'),
+                if (plan.totalWithFlights != null) ...[
+                  const TextSpan(text: '\nAvec les vols : '),
+                  TextSpan(
+                    text: '~${fmt(plan.totalWithFlights!)}',
+                    style: const TextStyle(color: VoyagoColors.text, fontWeight: FontWeight.w900),
+                  ),
+                ],
+              ],
+            ),
+          ),
+          if (plan.savings.isNotEmpty) ...[
+            const SizedBox(height: 12),
+            Text(
+              plan.fits ? 'Pour en garder plus dans ta poche' : 'Pour revenir dans ton budget',
+              style: const TextStyle(color: VoyagoColors.text, fontSize: 13, fontWeight: FontWeight.w800),
+            ),
+            const SizedBox(height: 6),
+            for (final x in plan.savings) _SavingRow(saving: x, fmt: fmt, onTap: () => onSaving(x.tab)),
+          ],
+          if (plan.moneyTips.isNotEmpty || plan.bookingWindow != null) ...[
+            const SizedBox(height: 10),
+            for (final t in plan.moneyTips)
+              _TipLine(icon: '💡', text: t),
+            if (plan.bookingWindow != null) _TipLine(icon: '⏰', text: plan.bookingWindow!),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+class _SavingRow extends StatelessWidget {
+  final PlanSaving saving;
+  final String Function(num) fmt;
+  final VoidCallback onTap;
+
+  const _SavingRow({required this.saving, required this.fmt, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    final icon = switch (saving.kind) {
+      'lodging' => 'assets/icons3d/hotel.png',
+      'pass' => 'assets/icons3d/admission_tickets.png',
+      _ => 'assets/icons3d/airplane.png',
+    };
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 6),
+      child: Material(
+        color: VoyagoColors.background.withValues(alpha: 0.7),
+        borderRadius: BorderRadius.circular(14),
+        child: InkWell(
+          borderRadius: BorderRadius.circular(14),
+          onTap: onTap,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+            child: Row(
+              children: [
+                Image.asset(icon, width: 28, height: 28),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(saving.title,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(color: VoyagoColors.text, fontSize: 13, fontWeight: FontWeight.w800)),
+                      Text(saving.detail,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(color: VoyagoColors.muted, fontSize: 11.5)),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Text('−${fmt(saving.amount)}',
+                    style: const TextStyle(color: VoyagoColors.primary, fontSize: 14, fontWeight: FontWeight.w900)),
+                const Icon(Icons.chevron_right_rounded, size: 18, color: VoyagoColors.muted),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _TipLine extends StatelessWidget {
+  final String icon;
+  final String text;
+
+  const _TipLine({required this.icon, required this.text});
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(top: 4),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text('$icon ', style: const TextStyle(fontSize: 12.5)),
+          Expanded(child: Text(text, style: const TextStyle(color: VoyagoColors.muted, fontSize: 12, height: 1.35))),
+        ],
+      ),
+    );
+  }
+}
+
+/// Bon prix / prix moyen / prix élevé face aux prix du mois sur la ligne
+class _PriceVerdict extends StatelessWidget {
+  final String verdict;
+  final int? median;
+  final String Function(num) fmt;
+
+  const _PriceVerdict({required this.verdict, this.median, required this.fmt});
+
+  @override
+  Widget build(BuildContext context) {
+    final (label, color) = switch (verdict) {
+      'good' => ('Bon prix : sous la moyenne du mois', VoyagoColors.primary),
+      'high' => ('Prix élevé : regarde les autres dates', VoyagoColors.orange),
+      _ => ('Prix dans la moyenne du mois', VoyagoColors.blue),
+    };
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      decoration: BoxDecoration(color: color.withValues(alpha: 0.12), borderRadius: BorderRadius.circular(10)),
+      child: Row(
+        children: [
+          Icon(verdict == 'high' ? Icons.trending_up_rounded : Icons.trending_down_rounded, size: 16, color: color),
+          const SizedBox(width: 6),
+          Expanded(
+            child: Text(
+              median != null ? '$label (≈ ${fmt(median!)}/pers.)' : label,
+              style: TextStyle(color: color, fontSize: 12, fontWeight: FontWeight.w700),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _FlightOfferRow extends StatelessWidget {
+  final List<String> labels;
+  final FlightOffer offer;
+  final String Function(num) fmt;
+  final VoidCallback onTap;
+
+  const _FlightOfferRow({required this.labels, required this.offer, required this.fmt, required this.onTap});
+
+  static String _duration(int? minutes) {
+    if (minutes == null || minutes <= 0) return '';
+    final h = minutes ~/ 60, m = minutes % 60;
+    return m == 0 ? '${h}h' : '${h}h${m.toString().padLeft(2, '0')}';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final out = _duration(offer.durationTo);
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 6),
+      child: Material(
+        color: VoyagoColors.background,
+        borderRadius: BorderRadius.circular(14),
+        child: InkWell(
+          borderRadius: BorderRadius.circular(14),
+          onTap: onTap,
+          child: Padding(
+            padding: const EdgeInsets.all(10),
+            child: Row(
+              children: [
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      if (labels.isNotEmpty)
+                        Padding(
+                          padding: const EdgeInsets.only(bottom: 4),
+                          child: Wrap(
+                            spacing: 4,
+                            runSpacing: 4,
+                            children: [
+                              for (final l in labels)
+                                Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                  decoration: BoxDecoration(
+                                    color: VoyagoColors.primary.withValues(alpha: 0.15),
+                                    borderRadius: BorderRadius.circular(6),
+                                  ),
+                                  child: Text(l,
+                                      style: const TextStyle(color: VoyagoColors.primary, fontSize: 10, fontWeight: FontWeight.w800)),
+                                ),
+                            ],
+                          ),
+                        ),
+                      Text(offer.airline ?? 'Compagnie',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(color: VoyagoColors.text, fontSize: 13.5, fontWeight: FontWeight.w800)),
+                      const SizedBox(height: 2),
+                      Text(
+                        [
+                          if (_FlightCard._time(offer.departureAt).isNotEmpty) 'Départ ${_FlightCard._time(offer.departureAt)}',
+                          if (out.isNotEmpty) out,
+                          _FlightCard._stops(offer.transfers),
+                          if (offer.returnTransfers != null && offer.returnTransfers != offer.transfers)
+                            'retour ${_FlightCard._stops(offer.returnTransfers!).toLowerCase()}',
+                        ].join(' · '),
+                        style: const TextStyle(color: VoyagoColors.muted, fontSize: 11.5),
+                      ),
+                    ],
+                  ),
+                ),
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  children: [
+                    Text(fmt(offer.price),
+                        style: const TextStyle(color: VoyagoColors.text, fontSize: 16, fontWeight: FontWeight.w900)),
+                    const Text('/pers. A/R', style: TextStyle(color: VoyagoColors.muted, fontSize: 10.5)),
+                  ],
+                ),
+                const SizedBox(width: 6),
+                const Icon(Icons.chevron_right_rounded, color: VoyagoColors.muted),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Grille ± 3 jours : le prix de chaque jour de départ, le moins cher en vert
+class _FlexibleDates extends StatelessWidget {
+  final List<FlightAlternative> days;
+  final String Function(num) fmt;
+  final ValueChanged<FlightAlternative> onTap;
+
+  const _FlexibleDates({required this.days, required this.fmt, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    final cheapest = days.map((d) => d.price).reduce((a, b) => a < b ? a : b);
+    return SizedBox(
+      height: 64,
+      child: ListView.separated(
+        scrollDirection: Axis.horizontal,
+        itemCount: days.length,
+        separatorBuilder: (_, __) => const SizedBox(width: 6),
+        itemBuilder: (_, i) {
+          final d = days[i];
+          final date = DateTime.tryParse(d.departure);
+          final best = d.price == cheapest;
+          final color = best ? VoyagoColors.primary : VoyagoColors.cardBorder;
+          return InkWell(
+            borderRadius: BorderRadius.circular(12),
+            onTap: () => onTap(d),
+            child: Container(
+              width: 74,
+              padding: const EdgeInsets.symmetric(vertical: 6),
+              decoration: BoxDecoration(
+                color: best ? VoyagoColors.primary.withValues(alpha: 0.14) : VoyagoColors.background,
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: color),
+              ),
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Text(date == null ? d.departure : DateFormat('EEE d', 'fr_FR').format(date),
+                      style: const TextStyle(color: VoyagoColors.muted, fontSize: 11)),
+                  const SizedBox(height: 2),
+                  Text(fmt(d.price),
+                      style: TextStyle(
+                        color: best ? VoyagoColors.primary : VoyagoColors.text,
+                        fontSize: 13.5,
+                        fontWeight: FontWeight.w900,
+                      )),
+                ],
+              ),
+            ),
+          );
+        },
+      ),
+    );
+  }
+}
+
+class _NearbyRow extends StatelessWidget {
+  final FlightAlternative alt;
+  final String Function(num) fmt;
+  final VoidCallback onTap;
+
+  const _NearbyRow({required this.alt, required this.fmt, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 6),
+      child: Material(
+        color: VoyagoColors.background,
+        borderRadius: BorderRadius.circular(12),
+        child: InkWell(
+          borderRadius: BorderRadius.circular(12),
+          onTap: onTap,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+            child: Row(
+              children: [
+                Text('${alt.origin ?? ''} → ${alt.destination ?? ''}',
+                    style: const TextStyle(color: VoyagoColors.text, fontSize: 13, fontWeight: FontWeight.w800)),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(_FlightCard._stops(alt.transfers),
+                      style: const TextStyle(color: VoyagoColors.muted, fontSize: 11.5)),
+                ),
+                Text(fmt(alt.price), style: const TextStyle(color: VoyagoColors.text, fontSize: 13.5, fontWeight: FontWeight.w900)),
+                if (alt.saving != null && alt.saving! > 0) ...[
+                  const SizedBox(width: 6),
+                  Text('−${fmt(alt.saving!)}',
+                      style: const TextStyle(color: VoyagoColors.primary, fontSize: 12, fontWeight: FontWeight.w800)),
+                ],
+                const Icon(Icons.chevron_right_rounded, size: 18, color: VoyagoColors.muted),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Pass touristique ou billets à l'unité : le verdict chiffré
+class _PassCard extends StatelessWidget {
+  final PassCompare pass;
+  final String Function(num) fmt;
+
+  const _PassCard({required this.pass, required this.fmt});
+
+  @override
+  Widget build(BuildContext context) {
+    final color = pass.worthIt ? VoyagoColors.primary : VoyagoColors.muted;
+    return _Card(
+      accent: pass.worthIt ? VoyagoColors.primary : null,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Image.asset('assets/icons3d/credit_card.png', width: 36, height: 36),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(pass.name,
+                        style: const TextStyle(color: VoyagoColors.text, fontSize: 15, fontWeight: FontWeight.w800)),
+                    Text(
+                      pass.worthIt ? 'Le pass est plus avantageux' : 'Les billets à l’unité restent moins chers',
+                      style: TextStyle(color: color, fontSize: 12, fontWeight: FontWeight.w700),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          Row(
+            children: [
+              Expanded(child: _CompareCell(label: 'Pass', value: fmt(pass.priceGroup), highlight: pass.worthIt)),
+              const SizedBox(width: 8),
+              Expanded(child: _CompareCell(label: 'À l’unité', value: fmt(pass.individualTotal), highlight: !pass.worthIt)),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Text('Inclut : ${pass.covers.join(', ')}',
+              style: const TextStyle(color: VoyagoColors.muted, fontSize: 11.5, height: 1.3)),
+          if (pass.worthIt && pass.saving > 0)
+            Padding(
+              padding: const EdgeInsets.only(top: 4),
+              child: Text('Économie : ${fmt(pass.saving)} pour le groupe',
+                  style: const TextStyle(color: VoyagoColors.primary, fontSize: 12.5, fontWeight: FontWeight.w800)),
+            ),
+          if (pass.tip != null) _TipLine(icon: '💡', text: pass.tip!),
+        ],
+      ),
+    );
+  }
+}
+
+class _CompareCell extends StatelessWidget {
+  final String label;
+  final String value;
+  final bool highlight;
+
+  const _CompareCell({required this.label, required this.value, required this.highlight});
+
+  @override
+  Widget build(BuildContext context) {
+    final color = highlight ? VoyagoColors.primary : VoyagoColors.muted;
+    return Container(
+      padding: const EdgeInsets.symmetric(vertical: 8),
+      decoration: BoxDecoration(
+        color: highlight ? VoyagoColors.primary.withValues(alpha: 0.12) : VoyagoColors.background,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: highlight ? VoyagoColors.primary.withValues(alpha: 0.5) : VoyagoColors.cardBorder),
+      ),
+      child: Column(
+        children: [
+          Text(label, style: const TextStyle(color: VoyagoColors.muted, fontSize: 11)),
+          Text(value, style: TextStyle(color: highlight ? color : VoyagoColors.text, fontSize: 16, fontWeight: FontWeight.w900)),
         ],
       ),
     );
