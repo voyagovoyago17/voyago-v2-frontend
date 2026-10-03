@@ -4,7 +4,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
-import 'package:video_player/video_player.dart';
 import '../api/api.dart';
 import '../core/utils/form_validators.dart';
 import '../providers/auth_provider.dart';
@@ -13,6 +12,7 @@ import '../services/destination_service.dart';
 import '../theme.dart';
 import '../widgets/auth_bottom_sheet.dart';
 import '../widgets/travel_calendar_picker.dart';
+import '../widgets/weather_flight_scene.dart';
 
 class ConfigureScreen extends ConsumerStatefulWidget {
   final List<String> selectedInterests;
@@ -911,8 +911,6 @@ class _TripGenerationLoader extends StatefulWidget {
 }
 
 class _TripGenerationLoaderState extends State<_TripGenerationLoader> {
-  VideoPlayerController? _controller;
-  bool _isVideoInitialized = false;
   Timer? _factTimer;
   final Random _random = Random();
   int _currentFactIndex = 0;
@@ -990,28 +988,7 @@ class _TripGenerationLoaderState extends State<_TripGenerationLoader> {
   void initState() {
     super.initState();
     _currentFactIndex = _random.nextInt(_travelFacts.length);
-    _initializeVideo();
     _startFactTimer();
-  }
-
-  Future<void> _initializeVideo() async {
-    try {
-      final controller = VideoPlayerController.asset(
-        'assets/medias/gif_logo - Trim.mp4',
-      );
-      _controller = controller;
-      await controller.initialize();
-      await controller.setLooping(true);
-      await controller.setVolume(0.0);
-      await controller.play();
-      if (mounted) {
-        setState(() {
-          _isVideoInitialized = true;
-        });
-      }
-    } catch (e) {
-      debugPrint('Erreur chargement vidéo loader: $e');
-    }
   }
 
   void _startFactTimer() {
@@ -1030,8 +1007,6 @@ class _TripGenerationLoaderState extends State<_TripGenerationLoader> {
   @override
   void dispose() {
     _factTimer?.cancel();
-    _controller?.pause();
-    _controller?.dispose();
     super.dispose();
   }
 
@@ -1050,7 +1025,7 @@ class _TripGenerationLoaderState extends State<_TripGenerationLoader> {
             mainAxisAlignment: MainAxisAlignment.center,
             crossAxisAlignment: CrossAxisAlignment.center,
             children: [
-              // Glowing Video Card Container
+              // Carte animée : le perroquet vole à travers la météo
               Container(
                 width: videoBoxSize,
                 height: videoBoxSize,
@@ -1075,34 +1050,7 @@ class _TripGenerationLoaderState extends State<_TripGenerationLoader> {
                   ],
                 ),
                 clipBehavior: Clip.antiAlias,
-                child: _isVideoInitialized &&
-                        _controller != null &&
-                        _controller!.value.isInitialized
-                    ? Center(
-                        child: AspectRatio(
-                          aspectRatio: _controller!.value.aspectRatio > 0
-                              ? _controller!.value.aspectRatio
-                              : 1.0,
-                          child: VideoPlayer(_controller!),
-                        ),
-                      )
-                    : Center(
-                        child: Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            const Text('🦜', style: TextStyle(fontSize: 48)),
-                            const SizedBox(height: 12),
-                            SizedBox(
-                              width: 26,
-                              height: 26,
-                              child: CircularProgressIndicator(
-                                strokeWidth: 2.5,
-                                color: VoyagoColors.primary.withOpacity(0.85),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
+                child: WeatherFlightScene(size: videoBoxSize),
               ),
 
               const SizedBox(height: 28),
