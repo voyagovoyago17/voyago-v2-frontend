@@ -209,6 +209,8 @@ class MapAmbiance {
 
   /// Fuseau inconnu : celui du téléphone si le lieu est dans sa région (cas le plus courant),
   /// sinon le fuseau nominal de la longitude (à l'heure près)
+  static int estimatedUtcOffset(double longitude) => _estimatedUtcOffset(longitude);
+
   static int _estimatedUtcOffset(double longitude) {
     final device = DateTime.now().timeZoneOffset.inMinutes;
     final solar = (longitude * 4.0).round();

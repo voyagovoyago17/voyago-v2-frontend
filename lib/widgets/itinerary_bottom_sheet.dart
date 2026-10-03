@@ -4,12 +4,16 @@ import 'package:intl/intl.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:custom_rating_bar/custom_rating_bar.dart';
 import 'package:latlong2/latlong.dart';
+import 'package:flutter_animate/flutter_animate.dart';
+import '../models/day_progress.dart';
 import '../models/place_stats.dart';
 import '../models/poi.dart';
 import '../providers/auth_provider.dart';
 import '../providers/place_stats_provider.dart';
 import '../providers/profile_provider.dart';
 import '../services/route_service.dart';
+import '../services/live_weather_service.dart';
+import '../services/map_ambiance_service.dart';
 import '../theme.dart';
 import 'notification_bell.dart';
 import 'place_review_sheet.dart';
@@ -124,6 +128,34 @@ class ItineraryBottomSheet extends ConsumerWidget {
       }
     }
     return starts;
+  }
+
+  /// Avancement de la journée : heure sur place (fuseau de la destination) et position du voyageur
+  DayProgress _progress(List<int> starts) {
+    if (pois.isEmpty) return DayProgress.idle(0);
+    final first = pois.first;
+    final offset = LiveWeatherService.instance.utcOffsetNear(first.lat, first.lng) ??
+        MapAmbiance.estimatedUtcOffset(first.lng);
+    final now = DateTime.now().toUtc().add(Duration(minutes: offset));
+    int? nearStop;
+    final me = userPosition;
+    if (me != null) {
+      var best = 150.0; // mètres : le voyageur est sur place
+      for (var i = 0; i < pois.length; i++) {
+        final d = RouteService.straightLineDistance(me, LatLng(pois[i].lat, pois[i].lng));
+        if (d <= best) {
+          best = d;
+          nearStop = i;
+        }
+      }
+    }
+    return DayProgress.compute(
+      starts: starts,
+      durations: [for (final p in pois) p.durationMinutes],
+      dayDate: dateOfDay(selectedDay),
+      nowAtDestination: DateTime(now.year, now.month, now.day, now.hour, now.minute),
+      nearStop: nearStop,
+    );
   }
 
   @override
@@ -481,15 +513,26 @@ class ItineraryBottomSheet extends ConsumerWidget {
                 ...() {
                   final starts = _startMinutes();
                   final primaryMode = TravelMode.primaryFor(transports);
-                  return pois.asMap().entries.expand((entry) {
+                  final progress = _progress(starts);
+                  return [
+                    if (progress.live) _DayProgressHeader(progress: progress, pois: pois),
+                    ...pois.asMap().entries.expand((entry) {
                     final i = entry.key;
                     final poi = entry.value;
                     final isLast = i == pois.length - 1;
+                    // Apparition en cascade, de la gauche vers sa place dans la frise
+                    Widget enter(Widget child, int order) => child
+                        .animate(key: ValueKey('day$selectedDay-$order'))
+                        .fadeIn(delay: (70 * order).ms, duration: 380.ms)
+                        .slideX(begin: -0.18, end: 0, delay: (70 * order).ms, duration: 480.ms, curve: Curves.easeOutCubic);
                     return [
-                      _TimelinePOI(
+                      enter(_TimelinePOI(
                         poi: poi,
                         index: i,
                         isFirst: i == 0,
+                        isLast: isLast,
+                        state: progress.stops[i],
+                        visitFill: progress.visitFill[i],
                         startMinutes: starts[i],
                         navigateIcon: primaryMode.icon,
                         stats: placeStats[placeCacheKey(poi.name, poi.lat, poi.lng)],
@@ -500,15 +543,17 @@ class ItineraryBottomSheet extends ConsumerWidget {
                         onTap: () => onPoiTap?.call(poi),
                         distanceFromUser: poiDistances?[i],
                         onNavigate: onNavigateToPoi != null ? () => onNavigateToPoi!(poi) : null,
-                      ),
+                      ), i * 2),
                       if (!isLast)
-                        _TransitSegment(
+                        enter(_TransitSegment(
                           poi: poi,
                           nextPoi: pois[i + 1],
                           routeResult: _segment(i),
-                        ),
+                          fill: progress.travelFill[i],
+                        ), i * 2 + 1),
                     ];
-                  });
+                  }),
+                  ];
                 }(),
 
               // Add plan placeholder card at the end of the day
@@ -558,6 +603,13 @@ class _TimelinePOI extends StatelessWidget {
   final POI poi;
   final int index;
   final bool isFirst;
+  final bool isLast;
+
+  /// Étape faite, en cours ou à venir (heure sur place + position)
+  final StopState state;
+
+  /// Remplissage du trait pendant la visite (0 à 1)
+  final double visitFill;
   final VoidCallback? onTap;
   final RouteResult? distanceFromUser;
   final VoidCallback? onNavigate;
@@ -579,6 +631,9 @@ class _TimelinePOI extends StatelessWidget {
     required this.index,
     required this.startMinutes,
     this.isFirst = false,
+    this.isLast = false,
+    this.state = StopState.upcoming,
+    this.visitFill = 0,
     this.onTap,
     this.distanceFromUser,
     this.onNavigate,
@@ -610,26 +665,8 @@ class _TimelinePOI extends StatelessWidget {
                 width: 32,
                 child: Column(
                   children: [
-                    Container(
-                      width: 16,
-                      height: 16,
-                      decoration: BoxDecoration(
-                        shape: BoxShape.circle,
-                        color: VoyagoColors.surface,
-                        border: Border.all(
-                          color: isFirst
-                              ? VoyagoColors.primary
-                              : VoyagoColors.muted.withValues(alpha: 0.4),
-                          width: 3,
-                        ),
-                      ),
-                    ),
-                    Expanded(
-                      child: Container(
-                        width: 2,
-                        color: VoyagoColors.cardBorder,
-                      ),
-                    ),
+                    _StopDot(state: state, highlight: isFirst),
+                    Expanded(child: _ProgressLine(fill: visitFill, faded: isLast)),
                   ],
                 ),
               ),
@@ -643,21 +680,35 @@ class _TimelinePOI extends StatelessWidget {
                     // Time badge & category
                     Row(
                       children: [
-                        Container(
+                        AnimatedContainer(
+                          duration: const Duration(milliseconds: 400),
                           padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                           decoration: BoxDecoration(
-                            color: VoyagoColors.background,
+                            color: state == StopState.upcoming
+                                ? VoyagoColors.background
+                                : VoyagoColors.primary.withValues(alpha: state == StopState.current ? 0.22 : 0.12),
                             borderRadius: BorderRadius.circular(6),
                           ),
                           child: Text(
                             _timeLabel,
-                            style: const TextStyle(
-                              color: VoyagoColors.text,
+                            style: TextStyle(
+                              color: state == StopState.upcoming ? VoyagoColors.text : VoyagoColors.primaryLight,
                               fontSize: 12,
                               fontWeight: FontWeight.w700,
                             ),
                           ),
                         ),
+                        if (state == StopState.current) ...[
+                          const SizedBox(width: 6),
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+                            decoration: BoxDecoration(color: VoyagoColors.primary, borderRadius: BorderRadius.circular(6)),
+                            child: const Text('EN COURS',
+                                style: TextStyle(color: Colors.white, fontSize: 9.5, fontWeight: FontWeight.w900)),
+                          )
+                              .animate(onPlay: (c) => c.repeat(reverse: true))
+                              .fade(begin: 0.65, end: 1, duration: 900.ms),
+                        ],
                         const SizedBox(width: 8),
                         Text(
                           _categoryLabel(poi.category),
@@ -993,10 +1044,14 @@ class _TransitSegment extends StatelessWidget {
   final POI nextPoi;
   final RouteResult? routeResult;
 
+  /// Avancement du trajet vers l'étape suivante (0 à 1)
+  final double fill;
+
   const _TransitSegment({
     required this.poi,
     required this.nextPoi,
     this.routeResult,
+    this.fill = 0,
   });
 
   @override
@@ -1016,18 +1071,44 @@ class _TransitSegment extends StatelessWidget {
           SizedBox(
             width: 32,
             child: Center(
-              child: Container(
-                width: 28,
-                height: 28,
-                decoration: BoxDecoration(
-                  color: VoyagoColors.background,
-                  shape: BoxShape.circle,
-                  border: Border.all(color: VoyagoColors.cardBorder),
-                ),
-                child: Icon(
-                  modeIcon,
-                  color: VoyagoColors.muted.withValues(alpha: 0.6),
-                  size: 14,
+              child: SizedBox(
+                width: 30,
+                height: 30,
+                child: TweenAnimationBuilder<double>(
+                  tween: Tween(end: fill),
+                  duration: const Duration(milliseconds: 900),
+                  curve: Curves.easeOutCubic,
+                  builder: (_, value, __) => Stack(
+                    alignment: Alignment.center,
+                    children: [
+                      Container(
+                        width: 28,
+                        height: 28,
+                        decoration: BoxDecoration(
+                          color: value >= 1 ? VoyagoColors.primary.withValues(alpha: 0.15) : VoyagoColors.background,
+                          shape: BoxShape.circle,
+                          border: Border.all(color: VoyagoColors.cardBorder),
+                        ),
+                        child: Icon(
+                          modeIcon,
+                          color: value > 0 ? VoyagoColors.primary : VoyagoColors.muted.withValues(alpha: 0.6),
+                          size: 14,
+                        ),
+                      ),
+                      // Le trajet se remplit en vert autour de l'icône
+                      if (value > 0)
+                        SizedBox(
+                          width: 30,
+                          height: 30,
+                          child: CircularProgressIndicator(
+                            value: value,
+                            strokeWidth: 2.5,
+                            color: VoyagoColors.primary,
+                            backgroundColor: Colors.transparent,
+                          ),
+                        ),
+                    ],
+                  ),
                 ),
               ),
             ),
@@ -1136,7 +1217,10 @@ class _UserToFirstPoiBadge extends StatelessWidget {
                     ),
                     const SizedBox(height: 2),
                     Text(
-                      '${distance.durationLabel} ${distance.mode.label} · ${distance.distanceLabel}',
+                      // Loin de la destination : pas de durée de trajet irréaliste
+                      distance.distanceMeters > 150000
+                          ? 'Tu es à ${distance.distanceLabel} · ton programme t’attend sur place'
+                          : '${distance.durationLabel} ${distance.mode.label} · ${distance.distanceLabel}',
                       style: TextStyle(
                         color: VoyagoColors.muted.withValues(alpha: 0.8),
                         fontSize: 11,
@@ -1154,6 +1238,186 @@ class _UserToFirstPoiBadge extends StatelessWidget {
             ],
           ),
         ),
+      ),
+    );
+  }
+}
+
+/// Point d'une étape : gris à venir, anneau vert pulsé en cours, vert coché une fois faite
+class _StopDot extends StatelessWidget {
+  final StopState state;
+  final bool highlight;
+  const _StopDot({required this.state, this.highlight = false});
+
+  @override
+  Widget build(BuildContext context) {
+    switch (state) {
+      case StopState.done:
+        return Container(
+          key: const ValueKey('done'),
+          width: 18,
+          height: 18,
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            color: VoyagoColors.primary,
+            boxShadow: [BoxShadow(color: VoyagoColors.primary.withValues(alpha: 0.45), blurRadius: 8)],
+          ),
+          child: const Icon(Icons.check_rounded, size: 12, color: Colors.white),
+        )
+            // Animé une fois, au passage à « fait »
+            .animate(key: const ValueKey('dot-done'))
+            .scale(begin: const Offset(0.4, 0.4), end: const Offset(1, 1), duration: 520.ms, curve: Curves.elasticOut)
+            .shimmer(delay: 200.ms, duration: 700.ms, color: Colors.white54);
+      case StopState.current:
+        return Container(
+          key: const ValueKey('current'),
+          width: 18,
+          height: 18,
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            color: VoyagoColors.surface,
+            border: Border.all(color: VoyagoColors.primary, width: 4),
+          ),
+        )
+            .animate(key: const ValueKey('dot-current'), onPlay: (c) => c.repeat(reverse: true))
+            .boxShadow(
+              begin: BoxShadow(color: VoyagoColors.primary.withValues(alpha: 0.0), blurRadius: 0, spreadRadius: 0),
+              end: BoxShadow(color: VoyagoColors.primary.withValues(alpha: 0.55), blurRadius: 12, spreadRadius: 3),
+              borderRadius: BorderRadius.circular(9),
+              duration: 1100.ms,
+            );
+      case StopState.upcoming:
+        return Container(
+          width: 16,
+          height: 16,
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            color: VoyagoColors.surface,
+            border: Border.all(
+              color: highlight ? VoyagoColors.primary : VoyagoColors.muted.withValues(alpha: 0.4),
+              width: 3,
+            ),
+          ),
+        );
+    }
+  }
+}
+
+/// Trait de la frise : se remplit en vert au fil de la visite
+class _ProgressLine extends StatelessWidget {
+  final double fill;
+  final bool faded;
+  const _ProgressLine({required this.fill, this.faded = false});
+
+  @override
+  Widget build(BuildContext context) {
+    // Dessiné (et non composé de boîtes) : compatible avec la hauteur intrinsèque de la carte
+    return TweenAnimationBuilder<double>(
+      tween: Tween(end: fill),
+      duration: const Duration(milliseconds: 1100),
+      curve: Curves.easeInOutCubic,
+      builder: (_, value, __) => CustomPaint(
+        size: const Size(6, 0),
+        painter: _LinePainter(value, faded),
+      ),
+    );
+  }
+}
+
+class _LinePainter extends CustomPainter {
+  final double fill;
+  final bool faded;
+  _LinePainter(this.fill, this.faded);
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final x = size.width / 2;
+    canvas.drawLine(
+      Offset(x, 0),
+      Offset(x, size.height),
+      Paint()
+        ..color = VoyagoColors.cardBorder.withValues(alpha: faded ? 0.5 : 1)
+        ..strokeWidth = 2,
+    );
+    if (fill <= 0) return;
+    final end = Offset(x, size.height * fill.clamp(0.0, 1.0));
+    canvas.drawLine(
+      Offset(x, 0),
+      end,
+      Paint()
+        ..color = VoyagoColors.primary.withValues(alpha: 0.45)
+        ..strokeWidth = 6
+        ..strokeCap = StrokeCap.round
+        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 4),
+    );
+    canvas.drawLine(
+      Offset(x, 0),
+      end,
+      Paint()
+        ..shader = const LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: [VoyagoColors.primary, VoyagoColors.primaryLight],
+        ).createShader(Rect.fromLTWH(0, 0, size.width, size.height))
+        ..strokeWidth = 3
+        ..strokeCap = StrokeCap.round,
+    );
+  }
+
+  @override
+  bool shouldRepaint(_LinePainter old) => old.fill != fill || old.faded != faded;
+}
+
+/// « Aujourd'hui · 2/5 étapes » : l'avancement de la journée en un coup d'œil
+class _DayProgressHeader extends StatelessWidget {
+  final DayProgress progress;
+  final List<POI> pois;
+  const _DayProgressHeader({required this.progress, required this.pois});
+
+  @override
+  Widget build(BuildContext context) {
+    final done = progress.doneCount;
+    final total = pois.length;
+    final current = progress.stops.indexOf(StopState.current);
+    final next = progress.stops.indexOf(StopState.upcoming);
+    final label = done == total
+        ? 'Journée bouclée, bravo ! 🎉'
+        : current >= 0
+            ? 'En ce moment : ${pois[current].name}'
+            : next >= 0
+                ? 'Prochaine étape : ${pois[next].name}'
+                : '';
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(20, 0, 20, 12),
+      child: Row(
+        children: [
+          Text('AUJOURD’HUI · $done/$total',
+              style: const TextStyle(color: VoyagoColors.primary, fontSize: 11, fontWeight: FontWeight.w900, letterSpacing: 0.6)),
+          const SizedBox(width: 10),
+          Expanded(
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(4),
+              child: TweenAnimationBuilder<double>(
+                tween: Tween(end: total == 0 ? 0 : done / total),
+                duration: const Duration(milliseconds: 900),
+                builder: (_, v, __) => LinearProgressIndicator(
+                  value: v,
+                  minHeight: 5,
+                  color: VoyagoColors.primary,
+                  backgroundColor: VoyagoColors.cardBorder,
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(width: 10),
+          Flexible(
+            flex: 2,
+            child: Text(label,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(color: VoyagoColors.muted, fontSize: 11.5, fontWeight: FontWeight.w600)),
+          ),
+        ],
       ),
     );
   }

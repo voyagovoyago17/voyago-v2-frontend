@@ -24,10 +24,20 @@ enum TravelMode {
   /// si le voyageur a choisi un autre moyen de transport.
   static const double walkableMeters = 1200;
 
+  /// Au-delà (vol d'oiseau), le vélo et la marche ne sont plus réalistes
+  static const double bikeableMeters = 20000;
+
   /// Choisit le mode d'un trajet selon les transports du voyage et la distance.
   /// La marche reste privilégiée pour les courts trajets si elle a été choisie.
   static TravelMode forTrip(List<String> transports, double straightMeters) {
     final modes = transports.map(_fromTransport).whereType<TravelMode>().toSet();
+    // Au-delà d'une distance raisonnable à vélo ou à pied, on passe à un mode motorisé
+    if (straightMeters > bikeableMeters) {
+      for (final motorized in const [TravelMode.car, TravelMode.transit, TravelMode.boat]) {
+        if (modes.contains(motorized)) return motorized;
+      }
+      return TravelMode.car;
+    }
     if (modes.isEmpty) return TravelMode.walk;
     if (modes.contains(TravelMode.walk) && (straightMeters <= walkableMeters || modes.length == 1)) {
       return TravelMode.walk;
