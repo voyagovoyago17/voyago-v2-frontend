@@ -355,6 +355,73 @@ class PassCompare {
       );
 }
 
+/// Alerte prix sur le vol du voyage
+class PriceAlertState {
+  final bool enabled;
+  final int? lastPrice;
+  final int? lowestPrice;
+  final int? baselinePrice;
+
+  const PriceAlertState({this.enabled = false, this.lastPrice, this.lowestPrice, this.baselinePrice});
+
+  factory PriceAlertState.fromJson(Map<String, dynamic> j) => PriceAlertState(
+        enabled: j['enabled'] == true,
+        lastPrice: _intOrNull(j['last_price']),
+        lowestPrice: _intOrNull(j['lowest_price']),
+        baselinePrice: _intOrNull(j['baseline_price']),
+      );
+}
+
+/// Inspiration : une destination pas chère depuis la ville du voyageur
+class FlightIdea {
+  final String code;
+  final String city;
+  final String? countryCode;
+  final int price;
+  final String? departure;
+  final String? returnDate;
+  final int transfers;
+  final String link;
+
+  const FlightIdea({
+    required this.code,
+    required this.city,
+    this.countryCode,
+    required this.price,
+    this.departure,
+    this.returnDate,
+    this.transfers = 0,
+    required this.link,
+  });
+
+  factory FlightIdea.fromJson(Map<String, dynamic> j) => FlightIdea(
+        code: '${j['code'] ?? ''}',
+        city: '${j['city'] ?? ''}',
+        countryCode: _str(j['country_code']),
+        price: _int(j['price']),
+        departure: _str(j['departure']),
+        returnDate: _str(j['return']),
+        transfers: _int(j['transfers']),
+        link: '${j['link'] ?? ''}',
+      );
+}
+
+class FlightInspiration {
+  final String? originName;
+  final String currency;
+  final List<FlightIdea> items;
+  final bool needsCity;
+
+  const FlightInspiration({this.originName, required this.currency, required this.items, this.needsCity = false});
+
+  factory FlightInspiration.fromJson(Map<String, dynamic> j) => FlightInspiration(
+        originName: _str(_map(j['origin'])?['name']),
+        currency: '${j['currency'] ?? 'EUR'}',
+        items: _list(j['items']).map(FlightIdea.fromJson).toList(),
+        needsCity: j['needs_city'] == true,
+      );
+}
+
 /// Une économie possible, avec l'onglet où la concrétiser
 class PlanSaving {
   final String kind;
@@ -541,6 +608,7 @@ class TripBookings {
   final List<BookedItem> bookings;
   final PassCompare? passCompare;
   final TripPlan? plan;
+  final PriceAlertState? priceAlert;
   final bool estimatesAvailable;
 
   const TripBookings({
@@ -563,6 +631,7 @@ class TripBookings {
     required this.bookings,
     this.passCompare,
     this.plan,
+    this.priceAlert,
     required this.estimatesAvailable,
   });
 
@@ -590,6 +659,7 @@ class TripBookings {
       bookings: _list(j['bookings']).map(BookedItem.fromJson).toList(),
       passCompare: _map(j['pass_compare']) == null ? null : PassCompare.fromJson(_map(j['pass_compare'])!),
       plan: _map(j['plan']) == null ? null : TripPlan.fromJson(_map(j['plan'])!),
+      priceAlert: _map(j['price_alert']) == null ? null : PriceAlertState.fromJson(_map(j['price_alert'])!),
       estimatesAvailable: j['estimates_available'] == true,
     );
   }

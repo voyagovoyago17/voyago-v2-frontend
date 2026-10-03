@@ -14,6 +14,8 @@ import '../widgets/auth_bottom_sheet.dart';
 import '../widgets/travel_calendar_picker.dart';
 import '../widgets/weather_flight_scene.dart';
 import '../widgets/configure/travel_party_section.dart';
+import '../widgets/configure/flight_inspiration_strip.dart';
+import '../models/trip_bookings.dart';
 
 class ConfigureScreen extends ConsumerStatefulWidget {
   final List<String> selectedInterests;
@@ -56,6 +58,9 @@ class _ConfigureScreenState extends ConsumerState<ConfigureScreen> {
 
   // Qui part et budget chiffré (facultatifs)
   TravelPartyValue _party = const TravelPartyValue();
+
+  /// Recrée le calendrier quand une idée de vol pré-remplit les dates
+  int _calendarVersion = 0;
 
   // State
   bool _isGenerating = false;
@@ -131,6 +136,35 @@ class _ConfigureScreenState extends ConsumerState<ConfigureScreen> {
         if (mounted) setState(() => _isSearchingDestinations = false);
       }
     });
+  }
+
+  /// Inspiration budget : la destination et les dates du vol trouvé pré-remplissent le formulaire
+  void _pickFlightIdea(FlightIdea idea) {
+    final start = idea.departure == null ? null : DateTime.tryParse(idea.departure!);
+    final end = idea.returnDate == null ? null : DateTime.tryParse(idea.returnDate!);
+    setState(() {
+      _destinationCtrl.text = idea.city;
+      _selectedCity = idea.city;
+      _selectedCountry = null;
+      _selectedCountryCode = idea.countryCode;
+      _showSuggestions = false;
+      if (start != null && end != null && !end.isBefore(start)) {
+        final days = end.difference(start).inDays + 1;
+        if (days >= 1 && days <= 30) {
+          _startDate = start;
+          _endDate = end;
+          _durationDays = days;
+          _calendarVersion++;
+        }
+      }
+    });
+    _focusNode.unfocus();
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(SnackBar(
+        behavior: SnackBarBehavior.floating,
+        content: Text('${idea.city} sélectionnée${start != null ? ' avec les dates du vol' : ''} ✈️'),
+      ));
   }
 
   void _selectDestination(DestinationItem item) {
@@ -566,7 +600,9 @@ class _ConfigureScreenState extends ConsumerState<ConfigureScreen> {
             ),
           ],
         ),
-        const SizedBox(height: 28),
+        const SizedBox(height: 14),
+        FlightInspirationStrip(party: _party, onPick: _pickFlightIdea),
+        const SizedBox(height: 22),
 
         // Pace Section with Slider & Dynamic Quote
         Row(
@@ -773,6 +809,7 @@ class _ConfigureScreenState extends ConsumerState<ConfigureScreen> {
 
         // Interactive Calendar Date Range Picker
         TravelCalendarPicker(
+          key: ValueKey(_calendarVersion),
           initialStartDate: _startDate,
           initialEndDate: _endDate,
           onRangeChanged: (start, end, duration) {

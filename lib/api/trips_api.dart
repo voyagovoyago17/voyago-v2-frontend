@@ -101,6 +101,25 @@ class TripsApi {
     return TripBookings.fromJson(Map<String, dynamic>.from(data as Map));
   }
 
+  /// Alerte prix du vol : activer / couper
+  Future<PriceAlertState> setPriceAlert(String tripId, bool enabled) async {
+    final data = enabled
+        ? await _client.post(Endpoints.tripPriceAlert(tripId))
+        : await _client.delete(Endpoints.tripPriceAlert(tripId));
+    return PriceAlertState.fromJson(Map<String, dynamic>.from(data as Map));
+  }
+
+  /// Inspiration budget : vols les moins chers depuis la ville du voyageur
+  Future<FlightInspiration> getFlightInspiration({int? maxPrice, String currency = 'EUR', int adults = 1, List<int> childrenAges = const []}) async {
+    final data = await _client.get(Endpoints.flightInspiration, queryParameters: {
+      if (maxPrice != null && maxPrice > 0) 'max_price': maxPrice,
+      'currency': currency,
+      'adults': adults,
+      if (childrenAges.isNotEmpty) 'children_ages': childrenAges.join(','),
+    });
+    return FlightInspiration.fromJson(Map<String, dynamic>.from(data as Map));
+  }
+
   Future<PackingList> getPacking(String tripId) async {
     final data = await _client.get(Endpoints.tripPacking(tripId));
     return PackingList.fromJson(data as Map<String, dynamic>);

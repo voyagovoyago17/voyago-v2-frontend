@@ -53,6 +53,10 @@ class _BookingsBudgetScreenState extends ConsumerState<BookingsBudgetScreen> {
   /// Partenaire fermé sans confirmer : « Tu as réservé ? » reste proposé
   _PendingBooking? _pending;
 
+  /// Alerte prix du vol (suivie à part pour un retour instantané du bouton)
+  PriceAlertState? _alert;
+  bool _alertBusy = false;
+
   @override
   void initState() {
     super.initState();
@@ -63,7 +67,12 @@ class _BookingsBudgetScreenState extends ConsumerState<BookingsBudgetScreen> {
     setState(() => _error = null);
     try {
       final data = await ref.read(tripsApiProvider).getBookings(widget.tripId);
-      if (mounted) setState(() => _data = data);
+      if (mounted) {
+        setState(() {
+          _data = data;
+          _alert = data.priceAlert ?? _alert;
+        });
+      }
     } on ApiException catch (e) {
       if (mounted) setState(() => _error = e.message);
     } catch (_) {
@@ -88,6 +97,33 @@ class _BookingsBudgetScreenState extends ConsumerState<BookingsBudgetScreen> {
       await _askBooked(track);
     } else {
       setState(() => _pending = track);
+    }
+  }
+
+  Future<void> _togglePriceAlert(bool enabled) async {
+    if (_alertBusy) return;
+    final previous = _alert;
+    HapticFeedback.selectionClick();
+    setState(() {
+      _alertBusy = true;
+      _alert = PriceAlertState(
+        enabled: enabled,
+        lastPrice: previous?.lastPrice,
+        lowestPrice: previous?.lowestPrice,
+        baselinePrice: previous?.baselinePrice,
+      );
+    });
+    try {
+      final state = await ref.read(tripsApiProvider).setPriceAlert(widget.tripId, enabled);
+      if (!mounted) return;
+      setState(() => _alert = state);
+      _snack(enabled ? '🔔 Alerte activée : on te prévient dès que le vol baisse' : 'Alerte prix coupée');
+    } on ApiException catch (e) {
+      if (!mounted) return;
+      setState(() => _alert = previous);
+      _snack(e.message, error: true);
+    } finally {
+      if (mounted) setState(() => _alertBusy = false);
     }
   }
 
@@ -296,6 +332,9 @@ class _BookingsBudgetScreenState extends ConsumerState<BookingsBudgetScreen> {
                       title: 'Aviasales',
                       track: _PendingBooking(category: 'flights', label: 'Vols ${t.title}', amount: price, url: url)),
                   onBooked: () => _askBooked(_PendingBooking(category: 'flights', label: 'Vols ${t.title}', amount: t.price)),
+                  alert: data.datesKnown ? (_alert ?? const PriceAlertState()) : null,
+                  alertBusy: _alertBusy,
+                  onToggleAlert: _togglePriceAlert,
                 )
               else
               _TransportCard(
@@ -1860,8 +1899,11 @@ class _FlightCard extends StatelessWidget {
   final String Function(num) fmt;
   final void Function(String url, int? price) onOpen;
   final VoidCallback onBooked;
+  final PriceAlertState? alert;
+  final bool alertBusy;
+  final ValueChanged<bool> onToggleAlert;
 
-  const _FlightCard({required this.option, required this.fmt, required this.onOpen, required this.onBooked});
+  const _FlightCard({required this.option, required this.fmt, required this.onOpen, required this.onBooked, this.alert, this.alertBusy = false, required this.onToggleAlert});
 
   static String _day(String? iso) {
     final d = iso == null ? null : DateTime.tryParse(iso.substring(0, iso.length >= 10 ? 10 : iso.length));
@@ -2015,6 +2057,10 @@ class _FlightCard extends StatelessWidget {
             const SizedBox(height: 6),
             for (final n in option.nearby)
               _NearbyRow(alt: n, fmt: fmt, onTap: () => onOpen(n.link, n.price * option.passengers)),
+          ],
+          if (alert != null) ...[
+            const SizedBox(height: 12),
+            _PriceAlertRow(alert: alert!, busy: alertBusy, fmt: fmt, onChanged: onToggleAlert),
           ],
           const SizedBox(height: 12),
           Row(
@@ -2751,6 +2797,60 @@ class _CompareCell extends StatelessWidget {
         children: [
           Text(label, style: const TextStyle(color: VoyagoColors.muted, fontSize: 11)),
           Text(value, style: TextStyle(color: highlight ? color : VoyagoColors.text, fontSize: 16, fontWeight: FontWeight.w900)),
+        ],
+      ),
+    );
+  }
+}
+
+/// « 🔔 Alerte prix » : suivi du vol, notification quand il baisse
+class _PriceAlertRow extends StatelessWidget {
+  final PriceAlertState alert;
+  final bool busy;
+  final String Function(num) fmt;
+  final ValueChanged<bool> onChanged;
+
+  const _PriceAlertRow({required this.alert, required this.busy, required this.fmt, required this.onChanged});
+
+  @override
+  Widget build(BuildContext context) {
+    final on = alert.enabled;
+    final detail = on
+        ? [
+            if (alert.lastPrice != null) 'Dernier relevé ${fmt(alert.lastPrice!)}',
+            if (alert.lowestPrice != null && alert.lowestPrice != alert.lastPrice) 'plus bas ${fmt(alert.lowestPrice!)}',
+          ].join(' · ')
+        : 'On te prévient dès que ce vol baisse';
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 200),
+      padding: const EdgeInsets.fromLTRB(12, 6, 6, 6),
+      decoration: BoxDecoration(
+        color: on ? VoyagoColors.primary.withValues(alpha: 0.12) : VoyagoColors.background,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: on ? VoyagoColors.primary.withValues(alpha: 0.5) : VoyagoColors.cardBorder),
+      ),
+      child: Row(
+        children: [
+          Icon(on ? Icons.notifications_active_rounded : Icons.notifications_none_rounded,
+              color: on ? VoyagoColors.primary : VoyagoColors.muted, size: 22),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(on ? 'Alerte prix active' : 'Alerte prix',
+                    style: const TextStyle(color: VoyagoColors.text, fontSize: 13.5, fontWeight: FontWeight.w800)),
+                Text(detail.isEmpty ? 'Suivi en cours' : detail,
+                    style: const TextStyle(color: VoyagoColors.muted, fontSize: 11.5)),
+              ],
+            ),
+          ),
+          Switch(
+            value: on,
+            activeThumbColor: Colors.white,
+            activeTrackColor: VoyagoColors.primary,
+            onChanged: busy ? null : onChanged,
+          ),
         ],
       ),
     );

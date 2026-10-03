@@ -20,6 +20,8 @@ bool canOpenNotification(AppNotification n) {
     case 'circle_request':
       // Un cercle privé refusé ne s'ouvre pas
       return n.data['circle_id'] != null && n.data['kind'] != 'rejected';
+    case 'price_drop':
+      return n.tripId?.isNotEmpty ?? false;
     case 'system':
       // Journal prêt, rappel de départ (valise) ou récap du soir
       return (n.data['journal'] == true || n.data['packing'] == true || n.data['recap'] == true) &&
@@ -67,5 +69,7 @@ void openNotificationTarget(BuildContext context, AppNotification n) {
       }
     case 'circle_request':
       context.push('/circle/${n.data['circle_id']}');
+    case 'price_drop':
+      context.push('/trip/${n.tripId}/bookings');
   }
 }
