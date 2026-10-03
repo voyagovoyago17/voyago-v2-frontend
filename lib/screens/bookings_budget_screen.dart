@@ -1,3 +1,5 @@
+import 'dart:async';
+import 'dart:math' as math;
 import 'dart:ui' show ImageFilter;
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
@@ -1574,8 +1576,56 @@ class _AddBookingSheetState extends State<_AddBookingSheet> {
 // États
 // =============================================================================
 
-class _LoadingView extends StatelessWidget {
+/// Chargement : les icônes 3D du voyage tournent autour du budget, et les étapes de la
+/// comparaison se cochent une à une (purement visuel : l'écran s'affiche dès que les données arrivent).
+class _LoadingView extends StatefulWidget {
   const _LoadingView();
+
+  @override
+  State<_LoadingView> createState() => _LoadingViewState();
+}
+
+class _LoadingViewState extends State<_LoadingView> with TickerProviderStateMixin {
+  static const _orbit = [
+    'assets/icons3d/airplane.png',
+    'assets/icons3d/hotel.png',
+    'assets/icons3d/bus.png',
+    'assets/icons3d/admission_tickets.png',
+    'assets/icons3d/automobile.png',
+    'assets/icons3d/fork_and_knife_with_plate.png',
+  ];
+
+  static const _steps = [
+    ('assets/icons3d/airplane.png', 'Vols aux vrais prix'),
+    ('assets/icons3d/hotel.png', 'Hébergements dans ton budget'),
+    ('assets/icons3d/bus.png', 'Transferts et transports'),
+    ('assets/icons3d/admission_tickets.png', 'Billets et pass'),
+    ('assets/icons3d/money_bag.png', 'Ton meilleur plan'),
+  ];
+
+  late final AnimationController _spin = AnimationController(vsync: this, duration: const Duration(seconds: 9))..repeat();
+  late final AnimationController _pulse =
+      AnimationController(vsync: this, duration: const Duration(milliseconds: 1400))..repeat(reverse: true);
+  Timer? _ticker;
+  int _step = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    // Une étape toutes les 1,6 s ; la dernière reste « en cours » jusqu'à l'arrivée des données
+    _ticker = Timer.periodic(const Duration(milliseconds: 1600), (_) {
+      if (!mounted || _step >= _steps.length - 1) return;
+      setState(() => _step++);
+    });
+  }
+
+  @override
+  void dispose() {
+    _ticker?.cancel();
+    _spin.dispose();
+    _pulse.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -1590,31 +1640,171 @@ class _LoadingView extends StatelessWidget {
             ),
           ),
           const Spacer(),
-          TweenAnimationBuilder<double>(
-            tween: Tween(begin: 0.85, end: 1),
-            duration: const Duration(milliseconds: 900),
-            curve: Curves.elasticOut,
-            builder: (_, s, child) => Transform.scale(scale: s, child: child),
-            child: Image.asset('assets/icons3d/money_bag.png', width: 96, height: 96),
+          SizedBox(
+            width: 240,
+            height: 240,
+            child: AnimatedBuilder(
+              animation: Listenable.merge([_spin, _pulse]),
+              builder: (_, __) {
+                final pulse = Curves.easeInOut.transform(_pulse.value);
+                return Stack(
+                  alignment: Alignment.center,
+                  children: [
+                    // Orbite en perspective et halo
+                    Container(
+                      width: 200,
+                      height: 84,
+                      decoration: ShapeDecoration(
+                        shape: OvalBorder(side: BorderSide(color: VoyagoColors.primary.withValues(alpha: 0.22), width: 1.5)),
+                      ),
+                    ),
+                    Container(
+                      width: 110 + 12 * pulse,
+                      height: 110 + 12 * pulse,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        gradient: RadialGradient(colors: [
+                          VoyagoColors.primary.withValues(alpha: 0.28),
+                          VoyagoColors.primary.withValues(alpha: 0.0),
+                        ]),
+                      ),
+                    ),
+                    // Icônes derrière le sac, le sac, puis celles qui passent devant
+                    for (var i = 0; i < _orbit.length; i++)
+                      if (!_inFront(i)) _orbitIcon(i, pulse),
+                    Transform.scale(
+                      scale: 0.94 + 0.08 * pulse,
+                      child: Image.asset('assets/icons3d/money_bag.png', width: 84, height: 84),
+                    ),
+                    for (var i = 0; i < _orbit.length; i++)
+                      if (_inFront(i)) _orbitIcon(i, pulse),
+                  ],
+                );
+              },
+            ),
           ),
           const SizedBox(height: 18),
           const Text('On compare les prix pour ton budget…',
-              style: TextStyle(color: VoyagoColors.text, fontSize: 16, fontWeight: FontWeight.w800)),
-          const SizedBox(height: 6),
-          const Text('Hébergements, transports et billets',
-              style: TextStyle(color: VoyagoColors.muted, fontSize: 13)),
-          const SizedBox(height: 22),
-          const SizedBox(
-            width: 140,
-            child: LinearProgressIndicator(
-              color: VoyagoColors.primary,
-              backgroundColor: VoyagoColors.cardBorder,
-              minHeight: 5,
-              borderRadius: BorderRadius.all(Radius.circular(4)),
+              textAlign: TextAlign.center,
+              style: TextStyle(color: VoyagoColors.text, fontSize: 17, fontWeight: FontWeight.w900)),
+          const SizedBox(height: 18),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 48),
+            child: Column(
+              children: [
+                for (var i = 0; i < _steps.length; i++)
+                  _LoadingStep(
+                    icon: _steps[i].$1,
+                    label: _steps[i].$2,
+                    state: i < _step ? 2 : (i == _step ? 1 : 0),
+                  ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 18),
+          SizedBox(
+            width: 180,
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(4),
+              child: TweenAnimationBuilder<double>(
+                tween: Tween(begin: 0, end: (_step + 1) / _steps.length * 0.92),
+                duration: const Duration(milliseconds: 600),
+                curve: Curves.easeOutCubic,
+                builder: (_, v, __) => LinearProgressIndicator(
+                  value: v,
+                  minHeight: 5,
+                  color: VoyagoColors.primary,
+                  backgroundColor: VoyagoColors.cardBorder,
+                ),
+              ),
             ),
           ),
           const Spacer(flex: 2),
         ],
+      ),
+    );
+  }
+
+  double _angle(int i) => 2 * math.pi * (_spin.value + i / _orbit.length);
+
+  bool _inFront(int i) => math.sin(_angle(i)) > 0;
+
+  /// Une icône sur l'orbite, qui flotte légèrement à son propre rythme
+  Widget _orbitIcon(int i, double pulse) {
+    const radius = 100.0;
+    final angle = _angle(i);
+    final bob = math.sin(2 * math.pi * _spin.value * 3 + i) * 4;
+    final depth = (math.sin(angle) + 1) / 2; // 0 derrière, 1 devant
+    return Transform.translate(
+      offset: Offset(math.cos(angle) * radius, math.sin(angle) * radius * 0.42 + bob),
+      child: Opacity(
+        opacity: 0.55 + 0.45 * depth,
+        child: Transform.scale(
+          scale: 0.75 + 0.35 * depth,
+          child: Container(
+            width: 48,
+            height: 48,
+            padding: const EdgeInsets.all(7),
+            decoration: BoxDecoration(
+              color: VoyagoColors.surface,
+              shape: BoxShape.circle,
+              border: Border.all(color: VoyagoColors.cardBorder),
+              boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.35), blurRadius: 10, offset: const Offset(0, 4))],
+            ),
+            child: Image.asset(_orbit[i]),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Une étape de la comparaison : à venir (0), en cours (1), faite (2)
+class _LoadingStep extends StatelessWidget {
+  final String icon;
+  final String label;
+  final int state;
+
+  const _LoadingStep({required this.icon, required this.label, required this.state});
+
+  @override
+  Widget build(BuildContext context) {
+    final done = state == 2;
+    final active = state == 1;
+    return AnimatedOpacity(
+      duration: const Duration(milliseconds: 300),
+      opacity: state == 0 ? 0.4 : 1,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 5),
+        child: Row(
+          children: [
+            Image.asset(icon, width: 22, height: 22),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Text(
+                label,
+                style: TextStyle(
+                  color: active || done ? VoyagoColors.text : VoyagoColors.muted,
+                  fontSize: 13.5,
+                  fontWeight: active ? FontWeight.w800 : FontWeight.w600,
+                ),
+              ),
+            ),
+            SizedBox(
+              width: 20,
+              height: 20,
+              child: AnimatedSwitcher(
+                duration: const Duration(milliseconds: 250),
+                transitionBuilder: (child, anim) => ScaleTransition(scale: anim, child: child),
+                child: done
+                    ? const Icon(Icons.check_circle_rounded, key: ValueKey('done'), color: VoyagoColors.primary, size: 20)
+                    : active
+                        ? const CircularProgressIndicator(key: ValueKey('active'), strokeWidth: 2.2, color: VoyagoColors.primary)
+                        : const Icon(Icons.circle_outlined, key: ValueKey('todo'), color: VoyagoColors.cardBorder, size: 18),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
