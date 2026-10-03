@@ -47,6 +47,24 @@ class _NotificationSettingsViewState extends ConsumerState<NotificationSettingsV
     } catch (_) {}
   }
 
+  /// Aperçu du son ; si rien ne sort, on dit pourquoi
+  Future<void> _listen(double volume) async {
+    final ok = await AppSounds.instance.preview(volume);
+    if (!mounted) return;
+    final error = AppSounds.instance.lastError;
+    ScaffoldMessenger.maybeOf(context)
+      ?..hideCurrentSnackBar()
+      ..showSnackBar(SnackBar(
+        behavior: SnackBarBehavior.floating,
+        backgroundColor: ok ? VoyagoColors.surface : VoyagoColors.coral,
+        duration: const Duration(seconds: 5),
+        content: Text(ok
+            ? '🔊 Tu n’entends rien ? Monte le volume média du téléphone (touches de volume) '
+                'et, sur iPhone, désactive l’interrupteur silencieux.'
+            : 'Son indisponible : ${error ?? 'erreur inconnue'}'),
+      ));
+  }
+
   Future<void> _setServer(String key, bool value) async {
     final before = _server;
     setState(() => _server = {...?_server, key: value});
@@ -113,7 +131,7 @@ class _NotificationSettingsViewState extends ConsumerState<NotificationSettingsV
                       onChanged: s.notifMode == NotifMode.sound
                           ? (v) => ref.read(appSettingsProvider.notifier).update(s.copyWith(soundVolume: v))
                           : null,
-                      onChangeEnd: (v) => AppSounds.instance.preview(v),
+                      onChangeEnd: _listen,
                     ),
                   ),
                   const Icon(Icons.volume_up_rounded, color: VoyagoColors.muted),
@@ -128,7 +146,7 @@ class _NotificationSettingsViewState extends ConsumerState<NotificationSettingsV
               Align(
                 alignment: Alignment.centerRight,
                 child: TextButton.icon(
-                  onPressed: s.notifMode == NotifMode.sound ? () => AppSounds.instance.preview(s.soundVolume) : null,
+                  onPressed: s.notifMode == NotifMode.sound ? () => _listen(s.soundVolume) : null,
                   icon: const Icon(Icons.play_arrow_rounded),
                   label: const Text('Écouter'),
                 ),

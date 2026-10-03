@@ -160,6 +160,7 @@ class _LiveStream with WidgetsBindingObserver {
 /// À regarder une fois depuis la racine de l'app.
 final liveNotificationsProvider = Provider<void>((ref) {
   if (kIsWeb) return;
+  AppSounds.instance.warmUp();
   final live = _LiveStream(ref);
   ref.listen<bool>(isAuthenticatedProvider, (_, loggedIn) => live.setLoggedIn(loggedIn), fireImmediately: true);
   ref.onDispose(live.dispose);
