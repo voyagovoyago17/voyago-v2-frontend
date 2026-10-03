@@ -38,6 +38,15 @@ class Endpoints {
   static String tripPriceAlert(String tripId) => '/api/trip/$tripId/price-alert';
   static const String flightInspiration = '/api/flights/inspiration';
   static String tripRemix(String tripId) => '/api/trip/$tripId/remix';
+  static const String busyDates = '/api/me/busy-dates';
+  static String tripCancel(String tripId) => '/api/trip/$tripId/cancel';
+  static String tripEditOptions(String tripId) => '/api/trip/$tripId/edit-options';
+  static String tripPoiAlternatives(String tripId) => '/api/trip/$tripId/pois/alternatives';
+  static String tripPoiSwap(String tripId) => '/api/trip/$tripId/pois/swap';
+  static String tripDayRedo(String tripId, int day) => '/api/trip/$tripId/days/$day/redo';
+  static String tripDayPlanB(String tripId, int day) => '/api/trip/$tripId/days/$day/plan-b';
+  static String tripRegenerate(String tripId) => '/api/trip/$tripId/regenerate';
+  static String tripEditCreditXp(String tripId) => '/api/trip/$tripId/edit-credits/xp';
   static String tripGems(String tripId) => '/api/trip/$tripId/gems';
   static String tripGemsStart(String tripId) => '/api/trip/$tripId/gems/start';
   static String tripGemCollect(String tripId, String gemId) => '/api/trip/$tripId/gems/$gemId/collect';
@@ -86,6 +95,9 @@ class Endpoints {
 
   // --- PRO & PAYMENTS MODULE ---
   static const String proCheckout = '/api/pro/checkout';
+  static const String proTiers = '/api/pro/tiers';
+  static const String proFreePlan = '/api/pro/free-plan';
+  static const String proEditPack = '/api/pro/edit-pack';
   static String proStatus(String sessionId) => '/api/pro/status/$sessionId';
 
   // --- NOTIFICATIONS MODULE ---

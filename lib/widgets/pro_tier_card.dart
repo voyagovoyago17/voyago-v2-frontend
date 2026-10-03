@@ -22,6 +22,9 @@ class ProTierCard extends StatelessWidget {
     final currency = tier['currency']?.toString() ?? '€';
     final period = tier['period']?.toString() ?? '';
     final benefits = tier['benefits'] as List? ?? [];
+    final tagline = tier['tagline']?.toString();
+    final quota = tier['edit_quota'] as Map?;
+    final redos = (quota?['redos'] as num?)?.toInt();
 
     return Stack(
       clipBehavior: Clip.none,
@@ -107,6 +110,30 @@ class ProTierCard extends StatelessWidget {
                   ],
                 ),
 
+                if (tagline != null && tagline.isNotEmpty) ...[
+                  const SizedBox(height: 10),
+                  Text(
+                    tagline,
+                    style: TextStyle(
+                      color: isBestOffer ? VoyagoColors.primaryLight : VoyagoColors.muted,
+                      fontSize: 13,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ],
+                if (redos != null) ...[
+                  const SizedBox(height: 12),
+                  // L'essentiel en un coup d'œil : modifications par voyage
+                  Row(
+                    children: [
+                      _QuotaPill(value: '$redos', label: 'journées refaites\npar voyage'),
+                      const SizedBox(width: 8),
+                      const _QuotaPill(value: '∞', label: 'lieux\nremplacés'),
+                      const SizedBox(width: 8),
+                      const _QuotaPill(value: '☔', label: 'plan B\npluie'),
+                    ],
+                  ),
+                ],
                 if (benefits.isNotEmpty) ...[
                   const SizedBox(height: 16),
                   const Divider(),
@@ -171,7 +198,7 @@ class ProTierCard extends StatelessWidget {
         ),
 
         // Best offer badge
-        if (isBestOffer)
+        if (isBestOffer || tier['savings_percent'] != null)
           Positioned(
             top: 0,
             left: 32,
@@ -181,8 +208,10 @@ class ProTierCard extends StatelessWidget {
                 color: VoyagoColors.yellow,
                 borderRadius: BorderRadius.circular(8),
               ),
-              child: const Text(
-                '⭐ Meilleure offre',
+              child: Text(
+                tier['savings_percent'] != null
+                    ? '⭐ Meilleure offre · −${tier['savings_percent']} %'
+                    : '⭐ Meilleure offre',
                 style: TextStyle(
                   color: Colors.black,
                   fontSize: 12,
@@ -192,6 +221,38 @@ class ProTierCard extends StatelessWidget {
             ),
           ),
       ],
+    );
+  }
+}
+
+class _QuotaPill extends StatelessWidget {
+  final String value;
+  final String label;
+
+  const _QuotaPill({required this.value, required this.label});
+
+  @override
+  Widget build(BuildContext context) {
+    return Expanded(
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 6),
+        decoration: BoxDecoration(
+          color: VoyagoColors.primary.withValues(alpha: 0.08),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: VoyagoColors.primary.withValues(alpha: 0.25)),
+        ),
+        child: Column(
+          children: [
+            Text(value, style: const TextStyle(color: VoyagoColors.primary, fontSize: 18, fontWeight: FontWeight.w900)),
+            const SizedBox(height: 2),
+            Text(
+              label,
+              textAlign: TextAlign.center,
+              style: const TextStyle(color: VoyagoColors.muted, fontSize: 10.5, height: 1.2),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }

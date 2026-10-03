@@ -18,6 +18,9 @@ class PoiSpotlightCard extends StatelessWidget {
   final VoidCallback onClose;
   final VoidCallback onNavigate;
 
+  /// Remplacer ce lieu par un lieu vérifié proche (auteur du voyage)
+  final VoidCallback? onReplace;
+
   const PoiSpotlightCard({
     super.key,
     required this.poi,
@@ -25,6 +28,7 @@ class PoiSpotlightCard extends StatelessWidget {
     this.routeFromMe,
     required this.onClose,
     required this.onNavigate,
+    this.onReplace,
   });
 
   String get _visitDuration {
@@ -102,9 +106,10 @@ class PoiSpotlightCard extends StatelessWidget {
                       ),
                     ],
                     const SizedBox(height: 12),
-                    SizedBox(
-                      width: double.infinity,
-                      child: ElevatedButton.icon(
+                    Row(
+                      children: [
+                        Expanded(
+                          child: ElevatedButton.icon(
                         onPressed: onNavigate,
                         icon: const Icon(Icons.near_me_rounded, size: 18),
                         label: const Text('Y aller', style: TextStyle(fontWeight: FontWeight.bold)),
@@ -116,6 +121,22 @@ class PoiSpotlightCard extends StatelessWidget {
                           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
                         ),
                       ),
+                    ),
+                        if (onReplace != null) ...[
+                          const SizedBox(width: 8),
+                          OutlinedButton.icon(
+                            onPressed: onReplace,
+                            icon: const Icon(Icons.swap_horiz_rounded, size: 18),
+                            label: const Text('Remplacer', style: TextStyle(fontWeight: FontWeight.bold)),
+                            style: OutlinedButton.styleFrom(
+                              foregroundColor: Colors.white,
+                              side: const BorderSide(color: Colors.white38),
+                              padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 12),
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                            ),
+                          ),
+                        ],
+                      ],
                     ),
                   ],
                 ),

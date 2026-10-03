@@ -7,6 +7,7 @@ import '../models/trip.dart';
 import '../providers/trips_provider.dart';
 import '../theme.dart';
 import 'packing/packing_sheet.dart';
+import 'trip_manage_sheet.dart';
 
 /// Accueil : prochain voyage (compte à rebours, météo du jour 1, valise),
 /// voyage en cours, ou voyage sans dates à planifier.
@@ -86,15 +87,12 @@ class _Card extends ConsumerWidget {
 
   Future<void> _addDates(BuildContext context, WidgetRef ref) async {
     final messenger = ScaffoldMessenger.of(context);
-    final now = DateTime.now();
-    final picked = await showDatePicker(
-      context: context,
-      initialDate: now.add(const Duration(days: 7)),
-      firstDate: DateTime(now.year, now.month, now.day),
-      lastDate: DateTime(now.year + 3),
-      helpText: 'Premier jour du voyage',
-      cancelText: 'Annuler',
-      confirmText: 'Valider',
+    // Jours passés grisés, jours de mes autres voyages hachurés
+    final picked = await showTripStartPicker(
+      context,
+      durationDays: trip.durationDays,
+      excludeTripId: trip.id,
+      title: 'Programmer ce voyage',
     );
     if (picked == null) return;
     try {

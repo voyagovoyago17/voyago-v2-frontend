@@ -54,6 +54,9 @@ class ItineraryBottomSheet extends ConsumerWidget {
   /// Réservations & Budget (auteur du voyage)
   final VoidCallback? onOpenBookings;
 
+  /// Gérer le voyage : dates, lieux, journées, plan B, annulation
+  final VoidCallback? onManageTrip;
+
   const ItineraryBottomSheet({
     super.key,
     required this.pois,
@@ -72,6 +75,7 @@ class ItineraryBottomSheet extends ConsumerWidget {
     this.onEditDates,
     this.onOpenPacking,
     this.onOpenBookings,
+    this.onManageTrip,
   });
 
   DateTime? get _start {
@@ -376,7 +380,7 @@ class ItineraryBottomSheet extends ConsumerWidget {
                               fontSize: 12,
                             ),
                           ),
-                          if (_tripRange != null || onEditDates != null || onOpenPacking != null || onOpenBookings != null) ...[
+                          if (_tripRange != null || onEditDates != null || onOpenPacking != null || onOpenBookings != null || onManageTrip != null) ...[
                             const SizedBox(height: 6),
                             Wrap(
                               spacing: 6,
@@ -386,6 +390,7 @@ class ItineraryBottomSheet extends ConsumerWidget {
                                   _TripDatesChip(range: _tripRange, onTap: onEditDates),
                                 if (onOpenPacking != null) _PackingChip(onTap: onOpenPacking!),
                                 if (onOpenBookings != null) _BookingsChip(onTap: onOpenBookings!),
+                                if (onManageTrip != null) _ManageChip(onTap: onManageTrip!),
                               ],
                             ),
                           ],
@@ -1318,6 +1323,37 @@ class _PackingChip extends StatelessWidget {
 
 
 /// « 💰 Réservations & Budget » : où dormir, comment bouger et quoi réserver selon le budget.
+class _ManageChip extends StatelessWidget {
+  final VoidCallback onTap;
+
+  const _ManageChip({required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      borderRadius: BorderRadius.circular(10),
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.fromLTRB(7, 4, 9, 4),
+        decoration: BoxDecoration(
+          color: VoyagoColors.yellow.withValues(alpha: 0.12),
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(color: VoyagoColors.yellow.withValues(alpha: 0.45)),
+        ),
+        child: const Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.tune_rounded, size: 15, color: VoyagoColors.yellow),
+            SizedBox(width: 4),
+            Text('Gérer',
+                style: TextStyle(color: VoyagoColors.yellow, fontSize: 11.5, fontWeight: FontWeight.w800)),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 class _BookingsChip extends StatelessWidget {
   final VoidCallback onTap;
 

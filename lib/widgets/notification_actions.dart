@@ -4,6 +4,7 @@ import '../models/app_notification.dart';
 import 'community/comments_sheet.dart';
 import 'place_review_sheet.dart';
 import 'packing/packing_sheet.dart';
+import 'trip_manage_sheet.dart';
 
 /// La notification mène-t-elle quelque part (écran, fiche) ?
 bool canOpenNotification(AppNotification n) {
@@ -22,6 +23,8 @@ bool canOpenNotification(AppNotification n) {
       return n.data['circle_id'] != null && n.data['kind'] != 'rejected';
     case 'price_drop':
       return n.tripId?.isNotEmpty ?? false;
+    case 'plan_b':
+      return (n.tripId?.isNotEmpty ?? false) && n.data['day'] is num;
     case 'system':
       // Journal prêt, rappel de départ (valise) ou récap du soir
       return (n.data['journal'] == true || n.data['packing'] == true || n.data['recap'] == true) &&
@@ -71,5 +74,7 @@ void openNotificationTarget(BuildContext context, AppNotification n) {
       context.push('/circle/${n.data['circle_id']}');
     case 'price_drop':
       context.push('/trip/${n.tripId}/bookings');
+    case 'plan_b':
+      showPlanBSheet(context, tripId: n.tripId!, day: (n.data['day'] as num).toInt());
   }
 }

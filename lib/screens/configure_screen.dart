@@ -812,6 +812,7 @@ class _ConfigureScreenState extends ConsumerState<ConfigureScreen> {
           key: ValueKey(_calendarVersion),
           initialStartDate: _startDate,
           initialEndDate: _endDate,
+          busyRanges: ref.watch(busyDatesProvider(null)).valueOrNull ?? const [],
           onRangeChanged: (start, end, duration) {
             setState(() {
               _startDate = start;

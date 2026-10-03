@@ -1,17 +1,26 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../theme.dart';
+import '../models/trip_edits.dart';
 
 class TravelCalendarPicker extends StatefulWidget {
   final DateTime? initialStartDate;
   final DateTime? initialEndDate;
   final Function(DateTime? start, DateTime? end, int durationDays) onRangeChanged;
 
+  /// Voyages déjà programmés : leurs jours sont hachurés et ne peuvent pas être choisis
+  final List<BusyRange> busyRanges;
+
+  /// Durée imposée (voyage existant) : un seul tap choisit le premier jour
+  final int? fixedDurationDays;
+
   const TravelCalendarPicker({
     super.key,
     this.initialStartDate,
     this.initialEndDate,
     required this.onRangeChanged,
+    this.busyRanges = const [],
+    this.fixedDurationDays,
   });
 
   @override
@@ -49,7 +58,41 @@ class _TravelCalendarPickerState extends State<TravelCalendarPicker> {
     });
   }
 
+  static const _months = ['janv.', 'févr.', 'mars', 'avr.', 'mai', 'juin', 'juil.', 'août', 'sept.', 'oct.', 'nov.', 'déc.'];
+  String _short(DateTime d) => '${d.day} ${_months[d.month - 1]}';
+
+  /// Voyage programmé qui occupe ce jour (le jour de transition reste libre)
+  BusyRange? _busyOn(DateTime day) => busyConflict(widget.busyRanges, day, day);
+
+  void _warnBusy(BusyRange r) {
+    ScaffoldMessenger.maybeOf(context)
+      ?..hideCurrentSnackBar()
+      ..showSnackBar(SnackBar(
+        backgroundColor: VoyagoColors.orange,
+        behavior: SnackBarBehavior.floating,
+        content: Text(
+          '🧳 Déjà en voyage à ${r.destination} du ${_short(r.start)} au ${_short(r.end)}. '
+          'Tu peux partir le jour de ton retour.',
+        ),
+      ));
+  }
+
   void _onDateTapped(DateTime day) {
+    final fixed = widget.fixedDurationDays;
+    if (fixed != null) {
+      final end = day.add(Duration(days: fixed - 1));
+      final conflict = busyConflict(widget.busyRanges, day, end);
+      if (conflict != null) return _warnBusy(conflict);
+      setState(() {
+        _startDate = day;
+        _endDate = fixed > 1 ? end : null;
+      });
+      widget.onRangeChanged(day, fixed > 1 ? end : null, fixed);
+      return;
+    }
+    final selectingEnd = _startDate != null && _endDate == null && !day.isBefore(_startDate!);
+    final conflict = selectingEnd ? busyConflict(widget.busyRanges, _startDate!, day) : _busyOn(day);
+    if (conflict != null) return _warnBusy(conflict);
     setState(() {
       if (_startDate == null || (_startDate != null && _endDate != null)) {
         // First tap: set start date
@@ -77,7 +120,7 @@ class _TravelCalendarPickerState extends State<TravelCalendarPicker> {
       _startDate = null;
       _endDate = null;
     });
-    widget.onRangeChanged(null, null, 5); // default fallback duration
+    widget.onRangeChanged(null, null, widget.fixedDurationDays ?? 5); // default fallback duration
   }
 
   bool _isSameDay(DateTime? a, DateTime? b) {
@@ -117,7 +160,7 @@ class _TravelCalendarPickerState extends State<TravelCalendarPicker> {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: VoyagoColors.surface.withOpacity(0.8),
+        color: VoyagoColors.surface.withValues(alpha: 0.8),
         borderRadius: BorderRadius.circular(20),
         border: Border.all(color: VoyagoColors.cardBorder),
       ),
@@ -131,7 +174,7 @@ class _TravelCalendarPickerState extends State<TravelCalendarPicker> {
               IconButton(
                 icon: const Icon(Icons.chevron_left, color: VoyagoColors.text),
                 onPressed: isPrevDisabled ? null : _prevMonth,
-                disabledColor: VoyagoColors.muted.withOpacity(0.3),
+                disabledColor: VoyagoColors.muted.withValues(alpha: 0.3),
                 splashRadius: 20,
               ),
               Text(
@@ -184,6 +227,7 @@ class _TravelCalendarPickerState extends State<TravelCalendarPicker> {
               final dayNumber = index - leadingEmptyCount + 1;
               final dayDate = DateTime(_currentMonth.year, _currentMonth.month, dayNumber);
               final isPast = dayDate.isBefore(today);
+              final busy = isPast ? null : _busyOn(dayDate);
 
               final isStart = _isSameDay(dayDate, _startDate);
               final isEnd = _isSameDay(dayDate, _endDate);
@@ -191,14 +235,16 @@ class _TravelCalendarPickerState extends State<TravelCalendarPicker> {
 
               return GestureDetector(
                 onTap: isPast ? null : () => _onDateTapped(dayDate),
-                child: Container(
+                child: CustomPaint(
+                  painter: busy != null ? const _HatchPainter() : null,
+                  child: Container(
                   decoration: BoxDecoration(
                     color: inRange
-                        ? VoyagoColors.primary.withOpacity(0.18)
+                        ? VoyagoColors.primary.withValues(alpha: 0.18)
                         : (isStart && _endDate != null)
-                            ? VoyagoColors.primary.withOpacity(0.18)
+                            ? VoyagoColors.primary.withValues(alpha: 0.18)
                             : (isEnd && _startDate != null)
-                                ? VoyagoColors.primary.withOpacity(0.18)
+                                ? VoyagoColors.primary.withValues(alpha: 0.18)
                                 : Colors.transparent,
                     borderRadius: isStart && isEnd
                         ? BorderRadius.circular(20)
@@ -220,7 +266,7 @@ class _TravelCalendarPickerState extends State<TravelCalendarPicker> {
                         boxShadow: (isStart || isEnd)
                             ? [
                                 BoxShadow(
-                                  color: VoyagoColors.primary.withOpacity(0.4),
+                                  color: VoyagoColors.primary.withValues(alpha: 0.4),
                                   blurRadius: 8,
                                   offset: const Offset(0, 2),
                                 ),
@@ -231,8 +277,10 @@ class _TravelCalendarPickerState extends State<TravelCalendarPicker> {
                         child: Text(
                           '$dayNumber',
                           style: TextStyle(
-                            color: isPast
-                                ? VoyagoColors.muted.withOpacity(0.35)
+                            decoration: busy != null ? TextDecoration.lineThrough : null,
+                            decorationColor: VoyagoColors.muted,
+                            color: isPast || busy != null
+                                ? VoyagoColors.muted.withValues(alpha: 0.35)
                                 : (isStart || isEnd)
                                     ? Colors.white
                                     : inRange
@@ -248,9 +296,29 @@ class _TravelCalendarPickerState extends State<TravelCalendarPicker> {
                     ),
                   ),
                 ),
+                ),
               );
             },
           ),
+          if (widget.busyRanges.isNotEmpty) ...[
+            const SizedBox(height: 8),
+            const Row(
+              children: [
+                SizedBox(
+                  width: 18,
+                  height: 12,
+                  child: CustomPaint(painter: _HatchPainter()),
+                ),
+                SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    'Jours déjà pris par un voyage programmé',
+                    style: TextStyle(color: VoyagoColors.muted, fontSize: 11),
+                  ),
+                ),
+              ],
+            ),
+          ],
           const SizedBox(height: 12),
 
           // Bottom Bar: Selected days count & Clear dates
@@ -308,6 +376,29 @@ class _TravelCalendarPickerState extends State<TravelCalendarPicker> {
       ),
     );
   }
+}
+
+/// Hachures diagonales des jours déjà pris
+class _HatchPainter extends CustomPainter {
+  const _HatchPainter();
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final rect = Offset.zero & size;
+    canvas.save();
+    canvas.clipRRect(RRect.fromRectAndRadius(rect.deflate(2), const Radius.circular(8)));
+    canvas.drawRect(rect, Paint()..color = VoyagoColors.orange.withValues(alpha: 0.08));
+    final paint = Paint()
+      ..color = VoyagoColors.orange.withValues(alpha: 0.35)
+      ..strokeWidth = 1.2;
+    for (double x = -size.height; x < size.width; x += 6) {
+      canvas.drawLine(Offset(x, size.height), Offset(x + size.height, 0), paint);
+    }
+    canvas.restore();
+  }
+
+  @override
+  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 }
 
 class _WeekdayLabel extends StatelessWidget {

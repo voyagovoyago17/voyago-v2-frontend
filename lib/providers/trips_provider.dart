@@ -2,6 +2,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../api/api.dart';
 import '../models/trip.dart';
 import '../models/trip_gem.dart';
+import '../models/trip_edits.dart';
 
 final tripsApiProvider = Provider<TripsApi>((ref) => TripsApi());
 
@@ -23,6 +24,20 @@ final tripDetailProvider = FutureProvider.family<Trip, String>((ref, tripId) asy
 final tripGemsProvider = FutureProvider.family<TripGems, String>((ref, tripId) async {
   if (tripId.isEmpty || tripId.startsWith('demo')) return const TripGems();
   return ref.watch(tripsApiProvider).getGems(tripId);
+});
+
+/// Jours déjà pris par mes voyages programmés (paramètre : voyage à ignorer)
+final busyDatesProvider = FutureProvider.autoDispose.family<List<BusyRange>, String?>((ref, excludeTripId) async {
+  try {
+    return await ref.watch(tripsApiProvider).getBusyDates(excludeTripId: excludeTripId);
+  } catch (_) {
+    return const [];
+  }
+});
+
+/// Droits et compteurs de modification d'un voyage
+final tripEditOptionsProvider = FutureProvider.autoDispose.family<TripEditOptions, String>((ref, tripId) async {
+  return ref.watch(tripsApiProvider).getEditOptions(tripId);
 });
 
 /// État du générateur d'itinéraires IA

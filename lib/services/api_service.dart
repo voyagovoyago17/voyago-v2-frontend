@@ -216,52 +216,22 @@ class ApiService {
     };
   }
 
+  /// Formules Pro depuis le serveur (prix, avantages, quotas), au format des cartes
   Future<List<Map<String, dynamic>>> getProTiers() async {
-    return const [
-      {
-        'id': 'monthly',
-        'name': 'Mensuel',
-        'price': '4.99',
-        'currency': '€',
-        'period': 'mois',
-        'benefits': [
-          'Itinéraires illimités 🦜',
-          'Accès à la communauté',
-          'Badges exclusifs',
-          'Support prioritaire',
-        ],
-        'is_best': false,
-      },
-      {
-        'id': 'yearly',
-        'name': 'Annuel',
-        'price': '39.99',
-        'currency': '€',
-        'period': 'an',
-        'benefits': [
-          'Tout du plan Mensuel',
-          'Économisez 34%',
-          'Fonctionnalités bêta',
-          'Badge "Voyageur Pro"',
-        ],
-        'is_best': true,
-      },
-      {
-        'id': 'lifetime',
-        'name': 'À vie',
-        'price': '79.99',
-        'currency': '€',
-        'period': '',
-        'benefits': [
-          'Accès à vie illimité',
-          'Toutes les futures fonctionnalités IA',
-          'Badge légendaire',
-          'Accès VIP',
-        ],
-        'is_best': false,
-      },
+    final tiers = await pro.getTiers();
+    return [
+      for (final t in tiers)
+        {
+          ...t,
+          'price': (t['price'] as num?)?.toStringAsFixed(2) ?? t['price']?.toString() ?? '',
+          'currency': '€',
+          'period': switch (t['duration']?.toString()) { 'month' => 'mois', 'year' => 'an', _ => '' },
+          'is_best': t['best_offer'] == true,
+        },
     ];
   }
+
+  Future<Map<String, dynamic>> getFreePlan() => pro.getFreePlan();
 
   Future<Map<String, dynamic>> getProStatus(String sessionId) =>
       pro.getProStatus(sessionId);

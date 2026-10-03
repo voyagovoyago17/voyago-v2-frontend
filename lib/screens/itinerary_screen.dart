@@ -35,6 +35,8 @@ import '../widgets/map_poi_pin.dart';
 import '../widgets/traveler_drawer.dart';
 import '../widgets/map_ambiance_overlay.dart';
 import '../widgets/place_review_sheet.dart';
+import '../widgets/trip_manage_sheet.dart';
+import '../models/trip_edits.dart';
 
 class ItineraryScreen extends ConsumerStatefulWidget {
   final String tripId;
@@ -728,33 +730,70 @@ class _ItineraryScreenState extends ConsumerState<ItineraryScreen>
   }
 
   /// Ajouter / modifier les dates : la fin découle de la durée, la météo est rafraîchie.
+  /// Les jours passés sont grisés et ceux de mes autres voyages hachurés.
   Future<void> _editTripDates(Trip trip) async {
     final messenger = ScaffoldMessenger.of(context);
-    final now = DateTime.now();
-    final current = DateTime.tryParse(trip.startDate ?? '');
-    final picked = await showDatePicker(
-      context: context,
-      initialDate: current ?? now,
-      firstDate: DateTime(now.year - 2),
-      lastDate: DateTime(now.year + 3),
-      helpText: 'Premier jour du voyage',
-      cancelText: 'Annuler',
-      confirmText: 'Valider',
+    final picked = await showTripStartPicker(
+      context,
+      durationDays: trip.durationDays,
+      excludeTripId: trip.id,
+      initial: DateTime.tryParse(trip.startDate ?? ''),
+      title: trip.startDate == null ? 'Programmer ce voyage' : 'Décaler mon voyage',
     );
     if (picked == null || !mounted) return;
     try {
-      await ref.read(tripsApiProvider).updateDates(trip.id, picked);
-      ref.invalidate(tripDetailProvider(trip.id));
-      ref.invalidate(tripGemsProvider(trip.id));
-      final userId = ref.read(currentUserProvider)?.userId;
-      if (userId != null) ref.invalidate(tripsProvider(userId));
+      final updated = await ref.read(tripsApiProvider).updateDates(trip.id, picked);
+      _onTripEdited(updated);
       messenger.showSnackBar(const SnackBar(
         backgroundColor: VoyagoColors.primary,
         content: Text('📅 Dates enregistrées : météo et journal mis à jour'),
       ));
     } on ApiException catch (e) {
+      if (e.statusCode == 402 && mounted) {
+        final options = await ref.read(tripsApiProvider).getEditOptions(trip.id).catchError((_) => const TripEditOptions());
+        if (mounted) await showEditQuotaSheet(context, tripId: trip.id, options: options, reason: 'date');
+        return;
+      }
       messenger.showSnackBar(SnackBar(backgroundColor: VoyagoColors.coral, content: Text(e.message)));
     }
+  }
+
+  /// Voyage modifié (dates, lieux, journée refaite…) : carte et listes rafraîchies
+  void _onTripEdited(Trip updated) {
+    ref.invalidate(tripDetailProvider(updated.id));
+    ref.invalidate(tripGemsProvider(updated.id));
+    ref.invalidate(busyDatesProvider);
+    final userId = ref.read(currentUserProvider)?.userId;
+    if (userId != null) ref.invalidate(tripsProvider(userId));
+    if (!mounted) return;
+    setState(() {
+      _currentTrip = updated;
+      _selectedDay = _selectedDay.clamp(1, updated.durationDays);
+      _activePoiIndex = null;
+      _navigationRoute = null;
+      _navigationTargetIndex = null;
+      _poiDistances = null;
+      _transitRoutesKey = null;
+    });
+    _computeTransitRoutesForDay();
+  }
+
+  /// Voyage à moi, pas une démo, pas encore rangé dans le journal
+  bool _canEditTrip(Trip trip) =>
+      !trip.id.startsWith('demo') && !trip.isPast && trip.userId == ref.watch(currentUserProvider)?.userId;
+
+  void _openManageSheet(Trip trip) {
+    showTripManageSheet(context, trip: trip, onTripChanged: _onTripEdited);
+  }
+
+  Future<void> _replacePoi(Trip trip, POI poi) async {
+    final result = await showPoiAlternativesSheet(context, trip: trip, poi: poi);
+    if (result == null || !mounted) return;
+    _onTripEdited(result.trip);
+    _showSafeSnackBar(const SnackBar(
+      backgroundColor: VoyagoColors.primary,
+      content: Text('🔁 Lieu remplacé par un lieu vérifié'),
+    ));
   }
 
   @override
@@ -1524,6 +1563,7 @@ class _ItineraryScreenState extends ConsumerState<ItineraryScreen>
                       routeFromMe: _poiDistances?[_activePoiIndex!],
                       onClose: () => setState(() => _activePoiIndex = null),
                       onNavigate: () => _navigateToPoi(dayPois[_activePoiIndex!]),
+                      onReplace: _canEditTrip(trip) ? () => _replacePoi(trip, dayPois[_activePoiIndex!]) : null,
                     )
                   : const SizedBox.shrink(key: ValueKey('spotlight-none')),
             ),
@@ -1710,6 +1750,7 @@ class _ItineraryScreenState extends ConsumerState<ItineraryScreen>
             onEditDates: !trip.id.startsWith('demo') && trip.userId == ref.watch(currentUserProvider)?.userId
                 ? () => _editTripDates(trip)
                 : null,
+            onManageTrip: _canEditTrip(trip) ? () => _openManageSheet(trip) : null,
             onOpenPacking: !trip.id.startsWith('demo') &&
                     !trip.isPast &&
                     trip.userId == ref.watch(currentUserProvider)?.userId

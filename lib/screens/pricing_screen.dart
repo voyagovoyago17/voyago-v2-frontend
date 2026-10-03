@@ -7,6 +7,7 @@ import '../services/api_service.dart';
 import '../providers/auth_provider.dart';
 import '../theme.dart';
 import '../widgets/pro_tier_card.dart';
+import '../widgets/free_plan_card.dart';
 
 class PricingScreen extends ConsumerStatefulWidget {
   const PricingScreen({super.key});
@@ -18,6 +19,7 @@ class PricingScreen extends ConsumerStatefulWidget {
 class _PricingScreenState extends ConsumerState<PricingScreen> {
   bool _isLoadingTiers = true;
   List<Map<String, dynamic>> _tiers = [];
+  Map<String, dynamic> _freePlan = FreePlanCard.fallback;
   String? _loadingTierId;
   String? _error;
   String? _checkoutStatus; // 'success', 'pending', 'cancelled'
@@ -32,26 +34,38 @@ class _PricingScreenState extends ConsumerState<PricingScreen> {
       'price': '4.99',
       'currency': '€',
       'period': 'mois',
+      'tagline': 'Pour un voyage qui arrive bientôt',
       'benefits': [
-        'Itinéraires illimités',
-        'Accès à la communauté',
-        'Badges exclusifs',
-        'Support prioritaire',
+        'Voyages illimités',
+        '2 journées refaites par voyage (IA, lieux vérifiés)',
+        'Lieux remplacés à volonté',
+        'Dates décalées sans limite avant le départ',
+        'Plan B pluie en un geste',
+        'Météo étendue 16 jours',
+        'Badge Pro 💎',
       ],
+      'edit_quota': {'redos': 2},
       'is_best': false,
     },
     {
-      'id': 'yearly',
+      'id': 'annual',
       'name': 'Annuel',
       'price': '39.99',
       'currency': '€',
       'period': 'an',
+      'tagline': 'Le meilleur rapport : −33 % vs mensuel',
+      'savings_percent': 33,
       'benefits': [
-        'Tout du plan Mensuel',
-        'Économisez 34%',
-        'Fonctionnalités bêta',
-        'Badge "Voyageur Pro"',
+        'Voyages illimités toute l’année',
+        '4 journées refaites par voyage (IA, lieux vérifiés)',
+        'Lieux remplacés à volonté',
+        'Dates décalées sans limite avant le départ',
+        'Plan B pluie en un geste',
+        'Météo étendue 16 jours',
+        'Badge Pro 💎 et accès anticipé',
+        '4 mois offerts par rapport au mensuel',
       ],
+      'edit_quota': {'redos': 4},
       'is_best': true,
     },
     {
@@ -60,12 +74,18 @@ class _PricingScreenState extends ConsumerState<PricingScreen> {
       'price': '79.99',
       'currency': '€',
       'period': '',
+      'tagline': 'Un seul paiement, pour toujours',
       'benefits': [
-        'Accès à vie',
-        'Toutes les futures mises à jour',
-        'Badge légendaire',
-        'Accès VIP Discord',
+        'Voyages illimités, pour toujours',
+        '6 journées refaites par voyage (IA, lieux vérifiés)',
+        'Lieux remplacés à volonté',
+        'Dates décalées sans limite avant le départ',
+        'Plan B pluie en un geste',
+        'Météo étendue 16 jours',
+        'Badge Pro 💎, accès anticipé',
+        'Toutes les futures fonctionnalités',
       ],
+      'edit_quota': {'redos': 6},
       'is_best': false,
     },
   ];
@@ -83,6 +103,9 @@ class _PricingScreenState extends ConsumerState<PricingScreen> {
   }
 
   Future<void> _loadTiers() async {
+    ApiService.instance.getFreePlan().then((plan) {
+      if (mounted && (plan['included'] as List?)?.isNotEmpty == true) setState(() => _freePlan = plan);
+    }).catchError((_) {});
     try {
       final tiers = await ApiService.instance.getProTiers();
       if (mounted) {
@@ -272,7 +295,7 @@ class _PricingScreenState extends ConsumerState<PricingScreen> {
                 ),
                 const SizedBox(height: 8),
                 const Text(
-                  'Générez des itinéraires illimités et accédez à toutes les fonctionnalités premium',
+                  'Voyages illimités, itinéraires modifiables à volonté et plan B pluie : ton voyage s’adapte à toi.',
                   style: TextStyle(color: VoyagoColors.muted, fontSize: 14),
                   textAlign: TextAlign.center,
                 ),
@@ -330,6 +353,13 @@ class _PricingScreenState extends ConsumerState<PricingScreen> {
               );
             }),
 
+          // Formule gratuite : ce qui est inclus et ce qui manque
+          if (!_isLoadingTiers)
+            FreePlanCard(
+              plan: _freePlan,
+              isCurrent: !(ref.watch(authProvider).user?.isProActive ?? false),
+            ),
+
           const SizedBox(height: 24),
 
           // Benefits summary
@@ -354,11 +384,13 @@ class _PricingScreenState extends ConsumerState<PricingScreen> {
                     ),
                   ),
                   SizedBox(height: 12),
-                  _BenefitRow(emoji: '🗺', text: 'Itinéraires illimités générés par IA'),
-                  _BenefitRow(emoji: '🌍', text: 'Accès complet à la communauté'),
-                  _BenefitRow(emoji: '⭐', text: 'Badges et récompenses exclusifs'),
+                  _BenefitRow(emoji: '🗺', text: 'Voyages illimités, lieux réels vérifiés'),
+                  _BenefitRow(emoji: '✨', text: 'Refais une journée ou tout le voyage (2, 4 ou 6 fois par voyage)'),
+                  _BenefitRow(emoji: '🔁', text: 'Remplace les lieux à volonté'),
+                  _BenefitRow(emoji: '📅', text: 'Décale tes dates sans limite avant le départ'),
+                  _BenefitRow(emoji: '☔', text: 'Plan B pluie : ta journée à l’abri en un geste'),
+                  _BenefitRow(emoji: '🗳️', text: 'Planifie des voyages avec ta tribu'),
                   _BenefitRow(emoji: '🔒', text: 'Paiement sécurisé via Stripe'),
-                  _BenefitRow(emoji: '💬', text: 'Support prioritaire'),
                 ],
               ),
             ),

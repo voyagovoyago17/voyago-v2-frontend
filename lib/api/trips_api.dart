@@ -2,6 +2,7 @@ import '../models/trip.dart';
 import '../models/packing.dart';
 import '../models/trip_bookings.dart';
 import '../models/trip_gem.dart';
+import '../models/trip_edits.dart';
 import 'dio_client.dart';
 import 'endpoints.dart';
 
@@ -71,6 +72,57 @@ class TripsApi {
     final day = '${start.year.toString().padLeft(4, '0')}-${start.month.toString().padLeft(2, '0')}-${start.day.toString().padLeft(2, '0')}';
     final data = await _client.patch(Endpoints.tripDates(tripId), data: {'start_date': day});
     return Trip.fromJson(data as Map<String, dynamic>);
+  }
+
+  /// Jours déjà pris par mes voyages programmés (hachurés dans le calendrier)
+  Future<List<BusyRange>> getBusyDates({String? excludeTripId}) async {
+    final data = await _client.get(
+      Endpoints.busyDates,
+      queryParameters: excludeTripId != null ? {'exclude': excludeTripId} : null,
+    );
+    if (data is! List) return const [];
+    return [for (final e in data) BusyRange.fromJson(Map<String, dynamic>.from(e as Map))];
+  }
+
+  /// Annuler un voyage pas encore commencé : il redevient une idée sans dates
+  Future<Trip> cancelTrip(String tripId) async {
+    final data = await _client.post(Endpoints.tripCancel(tripId));
+    return Trip.fromJson(Map<String, dynamic>.from(data as Map));
+  }
+
+  /// Droits et compteurs de modification du voyage
+  Future<TripEditOptions> getEditOptions(String tripId) async {
+    final data = await _client.get(Endpoints.tripEditOptions(tripId));
+    return TripEditOptions.fromJson(Map<String, dynamic>.from(data as Map));
+  }
+
+  /// Lieux réels vérifiés proches d'une étape, pour la remplacer
+  Future<List<PoiAlternative>> getPoiAlternatives(String tripId, {required int day, required int order}) async {
+    final data = await _client.get(Endpoints.tripPoiAlternatives(tripId), queryParameters: {'day': day, 'order': order});
+    final items = (data as Map)['items'] as List? ?? const [];
+    return [for (final e in items) PoiAlternative.fromJson(Map<String, dynamic>.from(e as Map))];
+  }
+
+  Future<TripEditResult> swapPoi(String tripId, {required int day, required int order, required String name}) async {
+    final data = await _client.post(Endpoints.tripPoiSwap(tripId), data: {'day': day, 'order': order, 'name': name});
+    return TripEditResult.fromJson(Map<String, dynamic>.from(data as Map));
+  }
+
+  Future<TripEditResult> redoDay(String tripId, int day, {bool planB = false}) async {
+    final data = await _client.post(planB ? Endpoints.tripDayPlanB(tripId, day) : Endpoints.tripDayRedo(tripId, day));
+    return TripEditResult.fromJson(Map<String, dynamic>.from(data as Map));
+  }
+
+  /// Tout refaire avant le départ (rythme, budget, envies, déplacements, durée)
+  Future<TripEditResult> regenerate(String tripId, Map<String, dynamic> changes) async {
+    final data = await _client.post(Endpoints.tripRegenerate(tripId), data: changes);
+    return TripEditResult.fromJson(Map<String, dynamic>.from(data as Map));
+  }
+
+  /// Échanger des XP contre une modification en plus
+  Future<TripEditResult> creditWithXp(String tripId) async {
+    final data = await _client.post(Endpoints.tripEditCreditXp(tripId));
+    return TripEditResult.fromJson(Map<String, dynamic>.from(data as Map));
   }
 
   /// Valise du voyage (générée par l'IA au premier appel, quelques secondes)
