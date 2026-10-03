@@ -31,6 +31,7 @@ class Endpoints {
   static String userTrips(String userId) => '/api/trips/$userId';
   static String tripDetail(String tripId) => '/api/trip/$tripId';
   static String tripVisibility(String tripId) => '/api/trip/$tripId/visibility';
+  static String tripDates(String tripId) => '/api/trip/$tripId/dates';
   static String tripRemix(String tripId) => '/api/trip/$tripId/remix';
   static String tripGems(String tripId) => '/api/trip/$tripId/gems';
   static String tripGemsStart(String tripId) => '/api/trip/$tripId/gems/start';

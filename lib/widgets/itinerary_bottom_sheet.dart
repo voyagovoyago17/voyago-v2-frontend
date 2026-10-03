@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:intl/intl.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:custom_rating_bar/custom_rating_bar.dart';
 import 'package:latlong2/latlong.dart';
@@ -41,6 +42,12 @@ class ItineraryBottomSheet extends ConsumerWidget {
   /// Identifiant du voyage (rattaché aux avis laissés depuis l'itinéraire).
   final String? tripId;
 
+  /// Premier jour du voyage (AAAA-MM-JJ) : affiche la date de chaque jour
+  final String? startDate;
+
+  /// Ajouter / modifier les dates (auteur du voyage uniquement)
+  final VoidCallback? onEditDates;
+
   const ItineraryBottomSheet({
     super.key,
     required this.pois,
@@ -55,7 +62,30 @@ class ItineraryBottomSheet extends ConsumerWidget {
     this.onNavigateToPoi,
     this.transports = const [],
     this.tripId,
+    this.startDate,
+    this.onEditDates,
   });
+
+  DateTime? get _start {
+    final d = DateTime.tryParse(startDate ?? '');
+    return d == null ? null : DateTime(d.year, d.month, d.day);
+  }
+
+  /// Date réelle du jour [day] (1 = premier jour), null si le voyage n'est pas daté.
+  DateTime? dateOfDay(int day) => _start?.add(Duration(days: day - 1));
+
+  String _capitalize(String s) => s.isEmpty ? s : s[0].toUpperCase() + s.substring(1);
+
+  /// « 8 oct. → 22 oct. 2026 · 15 jours »
+  String? get _tripRange {
+    final start = _start;
+    if (start == null) return null;
+    final end = start.add(Duration(days: totalDays - 1));
+    final sameYear = start.year == end.year;
+    final from = DateFormat(sameYear ? 'd MMM' : 'd MMM y', 'fr_FR').format(start);
+    final to = DateFormat('d MMM y', 'fr_FR').format(end);
+    return totalDays <= 1 ? to : '$from → $to · $totalDays jours';
+  }
 
   /// Trajet entre l'étape [i] et la suivante : calcul OSRM si disponible,
   /// sinon estimation instantanée selon le mode du voyage.
@@ -327,12 +357,21 @@ class ItineraryBottomSheet extends ConsumerWidget {
                           ),
                           const SizedBox(height: 2),
                           Text(
-                            '${pois.length} activités · Étape à $destination',
+                            [
+                              if (dateOfDay(selectedDay) != null)
+                                _capitalize(DateFormat('EEEE d MMMM', 'fr_FR').format(dateOfDay(selectedDay)!)),
+                              '${pois.length} activités',
+                              'Étape à $destination',
+                            ].join(' · '),
                             style: const TextStyle(
                               color: VoyagoColors.muted,
                               fontSize: 12,
                             ),
                           ),
+                          if (_tripRange != null || onEditDates != null) ...[
+                            const SizedBox(height: 6),
+                            _TripDatesChip(range: _tripRange, onTap: onEditDates),
+                          ],
                         ],
                       ),
                     ),
@@ -388,7 +427,9 @@ class ItineraryBottomSheet extends ConsumerWidget {
                           ),
                         ),
                         child: Text(
-                          'Jour $day',
+                          dateOfDay(day) != null
+                              ? 'Jour $day · ${DateFormat('d/MM', 'fr_FR').format(dateOfDay(day)!)}'
+                              : 'Jour $day',
                           style: TextStyle(
                             color: isActive ? Colors.white : VoyagoColors.muted,
                             fontSize: 12,
@@ -1180,6 +1221,51 @@ class _EmptyState extends StatelessWidget {
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+
+/// Dates du voyage : « 📅 8 oct. → 22 oct. 2026 » ou « Ajouter mes dates » (auteur).
+class _TripDatesChip extends StatelessWidget {
+  final String? range;
+  final VoidCallback? onTap;
+
+  const _TripDatesChip({this.range, this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    final hasDates = range != null;
+    final color = hasDates ? VoyagoColors.blue : VoyagoColors.primary;
+    return InkWell(
+      borderRadius: BorderRadius.circular(10),
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
+        decoration: BoxDecoration(
+          color: color.withValues(alpha: 0.12),
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(color: color.withValues(alpha: 0.35)),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(hasDates ? Icons.event_rounded : Icons.edit_calendar_rounded, size: 13, color: color),
+            const SizedBox(width: 5),
+            Flexible(
+              child: Text(
+                range ?? 'Ajouter mes dates',
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(color: color, fontSize: 11.5, fontWeight: FontWeight.w700),
+              ),
+            ),
+            if (hasDates && onTap != null) ...[
+              const SizedBox(width: 4),
+              Icon(Icons.edit_rounded, size: 11, color: color.withValues(alpha: 0.8)),
+            ],
+          ],
+        ),
       ),
     );
   }

@@ -726,6 +726,36 @@ class _ItineraryScreenState extends ConsumerState<ItineraryScreen>
     }
   }
 
+  /// Ajouter / modifier les dates : la fin découle de la durée, la météo est rafraîchie.
+  Future<void> _editTripDates(Trip trip) async {
+    final messenger = ScaffoldMessenger.of(context);
+    final now = DateTime.now();
+    final current = DateTime.tryParse(trip.startDate ?? '');
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: current ?? now,
+      firstDate: DateTime(now.year - 2),
+      lastDate: DateTime(now.year + 3),
+      helpText: 'Premier jour du voyage',
+      cancelText: 'Annuler',
+      confirmText: 'Valider',
+    );
+    if (picked == null || !mounted) return;
+    try {
+      await ref.read(tripsApiProvider).updateDates(trip.id, picked);
+      ref.invalidate(tripDetailProvider(trip.id));
+      ref.invalidate(tripGemsProvider(trip.id));
+      final userId = ref.read(currentUserProvider)?.userId;
+      if (userId != null) ref.invalidate(tripsProvider(userId));
+      messenger.showSnackBar(const SnackBar(
+        backgroundColor: VoyagoColors.primary,
+        content: Text('📅 Dates enregistrées : météo et journal mis à jour'),
+      ));
+    } on ApiException catch (e) {
+      messenger.showSnackBar(SnackBar(backgroundColor: VoyagoColors.coral, content: Text(e.message)));
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     if (_currentTrip != null) {
@@ -1672,6 +1702,11 @@ class _ItineraryScreenState extends ConsumerState<ItineraryScreen>
             transitRoutes: _transitRoutes,
             transports: trip.transports,
             tripId: trip.id,
+            startDate: trip.startDate,
+            // Seul l'auteur ajoute ou change les dates de son voyage
+            onEditDates: !trip.id.startsWith('demo') && trip.userId == ref.watch(currentUserProvider)?.userId
+                ? () => _editTripDates(trip)
+                : null,
             onNavigateToPoi: _navigateToPoi,
             onDayChanged: (day) {
               setState(() {

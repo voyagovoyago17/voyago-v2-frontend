@@ -61,6 +61,13 @@ class TripsApi {
     return TripVisibility.fromJson(json['visibility'], isPublic: json['is_public'] as bool?);
   }
 
+  /// Ajouter ou changer les dates d'un voyage (la fin découle de la durée, météo rafraîchie)
+  Future<Trip> updateDates(String tripId, DateTime start) async {
+    final day = '${start.year.toString().padLeft(4, '0')}-${start.month.toString().padLeft(2, '0')}-${start.day.toString().padLeft(2, '0')}';
+    final data = await _client.patch(Endpoints.tripDates(tripId), data: {'start_date': day});
+    return Trip.fromJson(data as Map<String, dynamic>);
+  }
+
   /// « Refaire ce voyage » : copie l'itinéraire d'un autre voyageur dans mes voyages (privé)
   Future<Trip> remixTrip(String tripId, {DateTime? startDate}) async {
     final data = await _client.post(
