@@ -100,6 +100,7 @@ class Endpoints {
   // --- JOURNAL DE VOYAGE MODULE ---
   static const String journal = '/api/journal';
   static String journalDetail(String tripId) => '/api/journal/$tripId';
+  static String journalNext(String tripId) => '/api/journal/$tripId/next';
   static String journalEntries(String tripId) => '/api/journal/$tripId/entries';
   static String journalPhotos(String tripId) => '/api/journal/$tripId/photos';
   static String journalPhoto(String tripId, String key) => '/api/journal/$tripId/photos/$key';

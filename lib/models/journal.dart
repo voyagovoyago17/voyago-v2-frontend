@@ -16,6 +16,10 @@ class JournalStats {
   final int notesCount;
   final int xpEarned;
 
+  /// Radar : pépites ramassées sur le terrain / proposées
+  final int gemsCollected;
+  final int gemsTotal;
+
   const JournalStats({
     this.distanceKm = 0,
     this.placesCount = 0,
@@ -27,6 +31,8 @@ class JournalStats {
     this.photosCount = 0,
     this.notesCount = 0,
     this.xpEarned = 0,
+    this.gemsCollected = 0,
+    this.gemsTotal = 0,
   });
 
   factory JournalStats.fromJson(Map<String, dynamic>? j) {
@@ -42,6 +48,8 @@ class JournalStats {
       photosCount: (j['photos_count'] as num?)?.toInt() ?? 0,
       notesCount: (j['notes_count'] as num?)?.toInt() ?? 0,
       xpEarned: (j['xp_earned'] as num?)?.toInt() ?? 0,
+      gemsCollected: (j['gems_collected'] as num?)?.toInt() ?? 0,
+      gemsTotal: (j['gems_total'] as num?)?.toInt() ?? 0,
     );
   }
 
@@ -243,4 +251,47 @@ class JournalDetail {
       );
 
   String get shortDestination => destination.split(',').first.trim();
+}
+
+
+/// « Et maintenant ? » : idée de prochain voyage.
+class NextTripIdea {
+  final String destination;
+  final String country;
+  final String emoji;
+  final String kind;
+  final String pitch;
+  final String bestSeason;
+  final int durationDays;
+  final List<String> interests;
+
+  const NextTripIdea({
+    required this.destination,
+    this.country = '',
+    this.emoji = '🌍',
+    this.kind = 'depaysement',
+    this.pitch = '',
+    this.bestSeason = '',
+    this.durationDays = 5,
+    this.interests = const [],
+  });
+
+  factory NextTripIdea.fromJson(Map<String, dynamic> j) => NextTripIdea(
+        destination: j['destination']?.toString() ?? '',
+        country: j['country']?.toString() ?? '',
+        emoji: j['emoji']?.toString() ?? '🌍',
+        kind: j['kind']?.toString() ?? 'depaysement',
+        pitch: j['pitch']?.toString() ?? '',
+        bestSeason: j['best_season']?.toString() ?? '',
+        durationDays: (j['duration_days'] as num?)?.toInt() ?? 5,
+        interests: (j['interests'] as List? ?? []).map((e) => e.toString()).toList(),
+      );
+
+  String get kindLabel => switch (kind) {
+        'meme_esprit' => 'Même esprit',
+        'pas_loin' => 'Pas loin',
+        _ => 'Dépaysement',
+      };
+
+  String get fullName => country.isNotEmpty ? '$destination, $country' : destination;
 }

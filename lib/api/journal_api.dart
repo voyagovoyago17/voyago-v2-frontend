@@ -15,6 +15,15 @@ class JournalApi {
         .toList();
   }
 
+  /// « Et maintenant ? » : 3 idées de prochain voyage (générées une fois par l'IA)
+  Future<List<NextTripIdea>> nextIdeas(String tripId) async {
+    final data = await _client.get(Endpoints.journalNext(tripId)) as Map<String, dynamic>;
+    return (data['suggestions'] as List? ?? [])
+        .whereType<Map>()
+        .map((e) => NextTripIdea.fromJson(Map<String, dynamic>.from(e)))
+        .toList();
+  }
+
   Future<JournalDetail> detail(String tripId) async {
     final data = await _client.get(Endpoints.journalDetail(tripId));
     return JournalDetail.fromJson(data as Map<String, dynamic>);

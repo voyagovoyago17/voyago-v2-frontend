@@ -106,10 +106,14 @@ final routerProvider = Provider<GoRouter>((ref) {
         path: '/configure',
         builder: (context, state) {
           final extra = state.extra;
+          // Liste d'intérêts (vibes de l'accueil) ou idée de voyage {destination, interests}
           final List<String> interests = extra is List
               ? extra.map((e) => e.toString()).toList()
-              : [];
-          return ConfigureScreen(selectedInterests: interests);
+              : extra is Map && extra['interests'] is List
+                  ? (extra['interests'] as List).map((e) => e.toString()).toList()
+                  : [];
+          final destination = extra is Map ? extra['destination']?.toString() : null;
+          return ConfigureScreen(selectedInterests: interests, initialDestination: destination);
         },
       ),
       GoRoute(

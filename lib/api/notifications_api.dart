@@ -54,6 +54,8 @@ class NotificationsApi {
         'token': token,
         'platform': platform,
         if (appVersion != null) 'app_version': appVersion,
+        // Heure locale du voyageur : rappels envoyés au bon moment de la journée
+        'utc_offset_minutes': DateTime.now().timeZoneOffset.inMinutes,
       });
 
   /// Oublie cet appareil : il ne reçoit plus les push du compte (déconnexion)

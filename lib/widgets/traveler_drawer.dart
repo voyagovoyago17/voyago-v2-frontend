@@ -189,8 +189,12 @@ class TravelerDrawer extends ConsumerWidget {
                   _NavTile(
                     icon: Icons.map_outlined,
                     label: 'Carte & Itinéraire',
-                    isActive: true,
-                    onTap: () => Navigator.of(context).pop(),
+                    isActive: currentTripId != null,
+                    onTap: () {
+                      Navigator.of(context).pop();
+                      // Ouvert depuis l'accueil : on rejoint la carte
+                      if (currentTripId == null) context.go('/itinerary');
+                    },
                   ),
                   _NavTile(
                     icon: Icons.auto_stories_outlined,

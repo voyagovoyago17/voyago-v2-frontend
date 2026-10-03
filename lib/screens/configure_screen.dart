@@ -17,7 +17,10 @@ import '../widgets/weather_flight_scene.dart';
 class ConfigureScreen extends ConsumerStatefulWidget {
   final List<String> selectedInterests;
 
-  const ConfigureScreen({super.key, required this.selectedInterests});
+  /// Destination pré-remplie (« Et maintenant ? » du journal)
+  final String? initialDestination;
+
+  const ConfigureScreen({super.key, required this.selectedInterests, this.initialDestination});
 
   @override
   ConsumerState<ConfigureScreen> createState() => _ConfigureScreenState();
@@ -84,6 +87,9 @@ class _ConfigureScreenState extends ConsumerState<ConfigureScreen> {
   void initState() {
     super.initState();
     _suggestions = DestinationService.popularDestinations;
+    if (widget.initialDestination != null && widget.initialDestination!.trim().isNotEmpty) {
+      _destinationCtrl.text = widget.initialDestination!.trim();
+    }
 
     _destinationCtrl.addListener(_onDestinationChanged);
     _focusNode.addListener(() {

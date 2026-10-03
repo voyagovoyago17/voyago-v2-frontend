@@ -16,6 +16,7 @@ import 'package:flutter_earth_globe/point_connection.dart';
 import 'package:flutter_earth_globe/point_connection_style.dart';
 import '../widgets/crystal_nav_bar.dart';
 import '../widgets/next_trip_card.dart';
+import '../widgets/traveler_drawer.dart';
 
 class HomeScreen extends ConsumerWidget {
   const HomeScreen({super.key});
@@ -41,6 +42,7 @@ class HomeScreen extends ConsumerWidget {
     return Scaffold(
       backgroundColor: VoyagoColors.background,
       extendBody: true,
+      drawer: user != null ? const TravelerDrawer() : null,
       bottomNavigationBar: VoyagoCrystalNavBar(
         currentIndex: 0,
         onPlusTap: () => context.go('/swipe'),
@@ -208,7 +210,8 @@ class HomeScreen extends ConsumerWidget {
                           subtitle: user != null ? 'Mes voyages sauvegardés' : 'Se connecter',
                           badge: 'Profil',
                           color: VoyagoColors.coral,
-                          onTap: () => context.go(user != null ? '/profile' : '/auth'),
+                          // Connecté : la photo de profil ouvre le menu (toutes les options de l'app)
+          onTap: () => user != null ? Scaffold.of(context).openDrawer() : context.go('/auth'),
                         ),
                       ),
                     ],
@@ -318,42 +321,8 @@ class _HeaderSection extends ConsumerWidget {
           ),
         ),
 
-        // Logo Voyagooo ou Bouton Connexion
-        if (user != null)
-          Container(
-            padding: EdgeInsets.symmetric(
-              horizontal: 2.5.w.clamp(8.0, 12.0),
-              vertical: 0.8.h.clamp(5.0, 8.0),
-            ),
-            decoration: BoxDecoration(
-              color: VoyagoColors.primary.withValues(alpha: 0.12),
-              borderRadius: BorderRadius.circular(16),
-              border: Border.all(
-                color: VoyagoColors.primary.withValues(alpha: 0.3),
-              ),
-            ),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Image.asset(
-                  'assets/logo/logo.png',
-                  width: 20,
-                  height: 20,
-                  errorBuilder: (_, __, ___) => const Text('🦜', style: TextStyle(fontSize: 16)),
-                ),
-                const SizedBox(width: 5),
-                Text(
-                  'Voyagooo',
-                  style: TextStyle(
-                    color: VoyagoColors.primary,
-                    fontWeight: FontWeight.w800,
-                    fontSize: 10.5.sp.clamp(12.0, 14.0),
-                  ),
-                ),
-              ],
-            ),
-          )
-        else
+        // Bouton Connexion (connecté : l'avatar ouvre le menu)
+        if (user == null)
           ElevatedButton(
             onPressed: () => context.go('/auth'),
             style: ElevatedButton.styleFrom(

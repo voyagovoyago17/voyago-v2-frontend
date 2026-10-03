@@ -14,6 +14,11 @@ final journalListProvider = FutureProvider.autoDispose<List<JournalTripSummary>>
 });
 
 /// Journal détaillé d'un voyage.
+/// « Et maintenant ? » : idées de prochain voyage pour un voyage terminé
+final journalNextIdeasProvider = FutureProvider.autoDispose.family<List<NextTripIdea>, String>((ref, tripId) {
+  return ref.watch(journalApiProvider).nextIdeas(tripId);
+});
+
 final journalDetailProvider = FutureProvider.autoDispose.family<JournalDetail, String>((ref, tripId) async {
   return ref.watch(journalApiProvider).detail(tripId);
 });

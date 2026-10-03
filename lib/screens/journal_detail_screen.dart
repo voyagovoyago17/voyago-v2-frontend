@@ -9,6 +9,7 @@ import '../providers/journal_provider.dart';
 import '../theme.dart';
 import '../widgets/journal/journal_entry_sheet.dart';
 import '../widgets/journal/journal_story_studio.dart';
+import '../widgets/journal/next_trip_ideas_card.dart';
 import '../widgets/journal/journal_ui.dart';
 import '../widgets/place_review_sheet.dart';
 
@@ -76,6 +77,13 @@ class _JournalDetailScreenState extends ConsumerState<JournalDetailScreen> {
                 day: days[i],
                 isFirst: days[i].day == 1,
               ),
+            ),
+          ),
+          // « Et maintenant ? » : idées de prochain voyage
+          SliverToBoxAdapter(
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+              child: NextTripIdeasCard(tripId: j.tripId, destination: j.destination),
             ),
           ),
           SliverToBoxAdapter(
@@ -337,7 +345,13 @@ class _HeroCard extends StatelessWidget {
           Row(
             children: [
               Expanded(
-                child: s.hiddenGems > 0
+                child: s.gemsTotal > 0
+                    ? JournalMetricTile(
+                        icon: Icons.diamond_rounded,
+                        color: VoyagoColors.blue,
+                        label: 'Pépites trouvées',
+                        value: '${s.gemsCollected}/${s.gemsTotal}')
+                    : s.hiddenGems > 0
                     ? JournalMetricTile(icon: Icons.diamond_rounded, color: VoyagoColors.blue, label: 'Pépites', value: '${s.hiddenGems}')
                     : JournalMetricTile(
                         icon: Icons.favorite_rounded, color: VoyagoColors.coral, label: 'Coups de cœur', value: '${s.favoritesCount}'),
