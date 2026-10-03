@@ -83,7 +83,9 @@ class _SettingsBody extends ConsumerWidget {
           title: "Mes demandes d'adhésion",
           subtitle: 'Cercles privés que tu as demandé à rejoindre',
         ),
-        if (requests.isEmpty)
+        if (requestsAsync.hasError && requests.isEmpty)
+          _ErrorTile(message: requestsAsync.error.toString(), onRetry: () => ref.invalidate(myJoinRequestsProvider))
+        else if (requests.isEmpty)
           const _InfoTile(text: 'Aucune demande en cours.')
         else
           for (final r in requests) _MyRequestTile(request: r),
@@ -93,7 +95,9 @@ class _SettingsBody extends ConsumerWidget {
           title: 'Tribus rejointes',
           subtitle: 'Ton rôle et ta période de découverte',
         ),
-        if (joined.isEmpty)
+        if (circlesAsync.hasError && circles.isEmpty)
+          const _InfoTile(text: 'Impossible de charger tes tribus pour le moment.')
+        else if (joined.isEmpty)
           const _InfoTile(text: 'Tu ne fais encore partie d\'aucune autre tribu.')
         else
           for (final c in joined) _JoinedCircleTile(circle: c),
