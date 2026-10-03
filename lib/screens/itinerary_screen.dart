@@ -1053,6 +1053,8 @@ class _ItineraryScreenState extends ConsumerState<ItineraryScreen>
     final ambiance = MapAmbiance.resolve(
       center: center,
       weatherCode: activeWeather?.weatherCode,
+      // Heure légale du lieu affiché (fuseau réel renvoyé par la météo), comme sur place
+      utcOffsetMinutes: LiveWeatherService.instance.utcOffsetNear(center.latitude, center.longitude),
     );
 
     final authState = ref.watch(authProvider);

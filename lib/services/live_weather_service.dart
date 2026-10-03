@@ -38,6 +38,30 @@ class LiveWeatherService {
   );
 
   final Map<String, _CachedWeather> _cache = {};
+
+  /// Fuseau horaire légal (heure d'été comprise) des lieux déjà consultés, renvoyé par Open-Meteo
+  final List<({double lat, double lng, int offsetMinutes})> _utcOffsets = [];
+
+  /// Décalage UTC réel (minutes) du lieu le plus proche déjà connu (≤ 150 km), sinon null
+  int? utcOffsetNear(double lat, double lng) {
+    ({double lat, double lng, int offsetMinutes})? best;
+    var bestDist = double.infinity;
+    for (final o in _utcOffsets) {
+      final d = (o.lat - lat) * (o.lat - lat) + (o.lng - lng) * (o.lng - lng);
+      if (d < bestDist) {
+        bestDist = d;
+        best = o;
+      }
+    }
+    // ≈ 1,35° ≈ 150 km : au-delà, le fuseau peut changer
+    return best != null && bestDist <= 1.35 * 1.35 ? best.offsetMinutes : null;
+  }
+
+  void _rememberUtcOffset(double lat, double lng, int offsetMinutes) {
+    _utcOffsets.removeWhere((o) => (o.lat - lat).abs() < 0.05 && (o.lng - lng).abs() < 0.05);
+    _utcOffsets.add((lat: lat, lng: lng, offsetMinutes: offsetMinutes));
+    if (_utcOffsets.length > 50) _utcOffsets.removeAt(0);
+  }
   final Map<String, String> _reverseGeocodeCache = {};
 
   String _cacheKey(double lat, double lng) =>
@@ -142,6 +166,8 @@ class LiveWeatherService {
 
       final data = response.data;
       if (data != null) {
+        final offsetSeconds = (data['utc_offset_seconds'] as num?)?.toInt();
+        if (offsetSeconds != null) _rememberUtcOffset(lat, lng, offsetSeconds ~/ 60);
         final current = data['current'] as Map<String, dynamic>?;
         final currentCode = (current?['weather_code'] as num?)?.toInt();
         final currentTemp = (current?['temperature_2m'] as num?)?.toDouble();

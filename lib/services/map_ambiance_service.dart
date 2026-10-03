@@ -145,11 +145,15 @@ class MapAmbiance {
     required LatLng center,
     int? weatherCode,
     DateTime? nowUtc,
+    /// Fuseau légal du lieu (Open-Meteo, heure d'été comprise) ; sinon estimé
+    int? utcOffsetMinutes,
   }) {
     final utc = (nowUtc ?? DateTime.now()).toUtc();
-    // Décalage solaire exact basé sur la longitude (1° de longitude = 4 minutes de rotation terrestre)
+    // Temps solaire (1° de longitude = 4 min) : sert au calcul astronomique jour / nuit / heure dorée
     final offsetMinutes = (center.longitude * 4.0).round();
     final localTime = utc.add(Duration(minutes: offsetMinutes));
+    // Heure affichée : l'heure légale du lieu, comme sur le téléphone de quelqu'un qui s'y trouve
+    final civilTime = utc.add(Duration(minutes: utcOffsetMinutes ?? _estimatedUtcOffset(center.longitude)));
     final localHourDecimal = localTime.hour + (localTime.minute / 60.0);
 
     // Calcul astronomique du soleil pour ce lieu et cette date
@@ -191,16 +195,25 @@ class MapAmbiance {
     }
 
     final timeStr =
-        '${localTime.hour.toString().padLeft(2, '0')}:${localTime.minute.toString().padLeft(2, '0')}';
+        '${civilTime.hour.toString().padLeft(2, '0')}:${civilTime.minute.toString().padLeft(2, '0')}';
 
     return _themeForPhase(
       phase: phase,
       timeStr: timeStr,
-      localHour: localTime.hour,
-      localMinute: localTime.minute,
+      localHour: civilTime.hour,
+      localMinute: civilTime.minute,
       isStormy: isStormy,
       weatherCode: weatherCode,
     );
+  }
+
+  /// Fuseau inconnu : celui du téléphone si le lieu est dans sa région (cas le plus courant),
+  /// sinon le fuseau nominal de la longitude (à l'heure près)
+  static int _estimatedUtcOffset(double longitude) {
+    final device = DateTime.now().timeZoneOffset.inMinutes;
+    final solar = (longitude * 4.0).round();
+    if ((device - solar).abs() <= 150) return device;
+    return ((longitude / 15.0).round() * 60).clamp(-12 * 60, 14 * 60);
   }
 
   static MapAmbiance _themeForPhase({
