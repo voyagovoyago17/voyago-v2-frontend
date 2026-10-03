@@ -541,6 +541,12 @@ class ActivityProposal {
   final String? imageUrl;
   final String? link;
   final List<PartnerChoice> choices;
+  /// Date du relevé du prix (catalogue partagé)
+  final DateTime? pricedAt;
+  /// Tarif qui change selon la saison
+  final bool seasonal;
+  /// ia | voyageurs | admin
+  final String priceSource;
 
   const ActivityProposal({
     required this.name,
@@ -552,6 +558,9 @@ class ActivityProposal {
     this.imageUrl,
     this.link,
     this.choices = const [],
+    this.pricedAt,
+    this.seasonal = false,
+    this.priceSource = 'ia',
   });
 
   factory ActivityProposal.fromJson(Map<String, dynamic> j) => ActivityProposal(
@@ -564,6 +573,9 @@ class ActivityProposal {
         imageUrl: _str(j['image_url']),
         link: _str(j['link']),
         choices: _choices(j['choices']),
+        pricedAt: j['priced_at'] == null ? null : DateTime.tryParse('${j['priced_at']}'),
+        seasonal: j['seasonal'] == true,
+        priceSource: '${j['price_source'] ?? 'ia'}',
       );
 }
 

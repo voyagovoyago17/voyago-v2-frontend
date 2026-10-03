@@ -96,6 +96,11 @@ class TripsApi {
     return TripBookings.fromJson(Map<String, dynamic>.from(data as Map));
   }
 
+  /// « Prix incorrect ? » : le prix de cette visite sera revérifié pour tous les voyageurs
+  Future<void> reportActivityPrice(String tripId, String name) async {
+    await _client.post('${Endpoints.tripBookings(tripId)}/price-report', data: {'name': name});
+  }
+
   Future<TripBookings> removeBooking(String tripId, String itemId) async {
     final data = await _client.delete('${Endpoints.tripBookings(tripId)}/$itemId');
     return TripBookings.fromJson(Map<String, dynamic>.from(data as Map));

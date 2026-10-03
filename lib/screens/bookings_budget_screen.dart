@@ -149,6 +149,25 @@ class _BookingsBudgetScreenState extends ConsumerState<BookingsBudgetScreen> {
     }
   }
 
+  /// « Prix incorrect ? » : signalé une fois par visite et par session
+  final Set<String> _reported = {};
+
+  Future<void> _reportPrice(ActivityProposal a) async {
+    if (_reported.contains(a.name)) {
+      _snack('Déjà signalé, merci !');
+      return;
+    }
+    HapticFeedback.selectionClick();
+    _reported.add(a.name);
+    try {
+      await ref.read(tripsApiProvider).reportActivityPrice(widget.tripId, a.name);
+      _snack('Merci ! On revérifie le prix de ${a.name} pour tous les voyageurs.');
+    } on ApiException catch (e) {
+      _reported.remove(a.name);
+      _snack(e.message, error: true);
+    }
+  }
+
   void _openChoice(PartnerChoice c, {required String category, required String label, int? amount}) {
     _open(c.url,
         title: c.label,
@@ -412,6 +431,7 @@ class _BookingsBudgetScreenState extends ConsumerState<BookingsBudgetScreen> {
                   fmt: _fmt,
                   travelers: data.travelersCount,
                   onChoice: (c) => _openChoice(c, category: 'activities', label: a.name, amount: a.priceGroup),
+                  onReportPrice: () => _reportPrice(a),
                 ),
             ],
             const _PriceDisclaimer(),
@@ -1209,8 +1229,27 @@ class _ActivityCard extends StatelessWidget {
   final String Function(num) fmt;
   final int travelers;
   final ValueChanged<PartnerChoice> onChoice;
+  final VoidCallback onReportPrice;
 
-  const _ActivityCard({required this.activity, required this.fmt, required this.travelers, required this.onChoice});
+  const _ActivityCard({
+    required this.activity,
+    required this.fmt,
+    required this.travelers,
+    required this.onChoice,
+    required this.onReportPrice,
+  });
+
+  /// « relevé en mars 2026 », « confirmé par des voyageurs », « tarif de haute saison »…
+  String? get _priceMeta {
+    final parts = <String>[
+      if (activity.priceSource == 'voyageurs')
+        'prix confirmé par des voyageurs'
+      else if (activity.pricedAt != null)
+        'relevé en ${DateFormat('MMMM yyyy', 'fr_FR').format(activity.pricedAt!.toLocal())}',
+      if (activity.seasonal) 'tarif selon la saison',
+    ];
+    return parts.isEmpty ? null : parts.join(' · ');
+  }
 
   List<PartnerChoice> get _choices => activity.choices.isNotEmpty
       ? activity.choices
@@ -1266,6 +1305,28 @@ class _ActivityCard extends StatelessWidget {
                 Text(
                   travelers > 1 ? '~${fmt(activity.priceGroup)} pour vous $travelers' : '~${fmt(activity.priceGroup)}',
                   style: const TextStyle(color: VoyagoColors.yellow, fontSize: 14, fontWeight: FontWeight.w900),
+                ),
+                Row(
+                  children: [
+                    if (_priceMeta != null)
+                      Flexible(
+                        child: Text(_priceMeta!,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(color: VoyagoColors.muted, fontSize: 10.5)),
+                      ),
+                    if (_priceMeta != null) const Text(' · ', style: TextStyle(color: VoyagoColors.muted, fontSize: 10.5)),
+                    GestureDetector(
+                      onTap: onReportPrice,
+                      child: const Text('Prix incorrect ?',
+                          style: TextStyle(
+                            color: VoyagoColors.muted,
+                            fontSize: 10.5,
+                            decoration: TextDecoration.underline,
+                            decorationColor: VoyagoColors.muted,
+                          )),
+                    ),
+                  ],
                 ),
                 if (_choices.isNotEmpty) ...[
                   const SizedBox(height: 8),
