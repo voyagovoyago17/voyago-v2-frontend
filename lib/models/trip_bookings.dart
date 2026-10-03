@@ -57,6 +57,57 @@ Map<String, dynamic>? _map(dynamic v) => v is Map ? Map<String, dynamic>.from(v)
 List<Map<String, dynamic>> _list(dynamic v) =>
     v is List ? v.whereType<Map>().map((e) => Map<String, dynamic>.from(e)).toList() : const [];
 
+/// Un partenaire de réservation et son lien pré-rempli (affilié quand la marque l'a validé)
+class PartnerChoice {
+  final String partner;
+  final String label;
+  final String url;
+  final String? note;
+
+  const PartnerChoice({required this.partner, required this.label, required this.url, this.note});
+
+  factory PartnerChoice.fromJson(Map<String, dynamic> j) => PartnerChoice(
+        partner: '${j['partner'] ?? ''}',
+        label: '${j['label'] ?? ''}',
+        url: '${j['url'] ?? ''}',
+        note: _str(j['note']),
+      );
+}
+
+List<PartnerChoice> _choices(dynamic v) =>
+    _list(v).map(PartnerChoice.fromJson).where((c) => c.url.startsWith('http')).toList();
+
+/// Autre façon de dormir sur une étape (type, quartier, prix pour le groupe)
+class StayOption {
+  final String kind;
+  final String area;
+  final String? why;
+  final int nightlyMin;
+  final int nightlyMax;
+  final bool fitsBudget;
+  final List<PartnerChoice> choices;
+
+  const StayOption({
+    required this.kind,
+    required this.area,
+    this.why,
+    required this.nightlyMin,
+    required this.nightlyMax,
+    required this.fitsBudget,
+    required this.choices,
+  });
+
+  factory StayOption.fromJson(Map<String, dynamic> j) => StayOption(
+        kind: '${j['kind'] ?? ''}',
+        area: '${j['area'] ?? ''}',
+        why: _str(j['why']),
+        nightlyMin: _int(j['nightly_min']),
+        nightlyMax: _int(j['nightly_max']),
+        fitsBudget: j['fits_budget'] == true,
+        choices: _choices(j['choices']),
+      );
+}
+
 class StayProposal {
   final int index;
   final int fromDay;
@@ -73,6 +124,8 @@ class StayProposal {
   final String? checkout;
   final String? bookingUrl;
   final String? airbnbUrl;
+  final List<PartnerChoice> choices;
+  final List<StayOption> options;
 
   const StayProposal({
     required this.index,
@@ -90,6 +143,8 @@ class StayProposal {
     this.checkout,
     this.bookingUrl,
     this.airbnbUrl,
+    this.choices = const [],
+    this.options = const [],
   });
 
   /// Le prix estimé tient-il dans le plafond par nuit ?
@@ -113,6 +168,8 @@ class StayProposal {
       checkout: _str(j['checkout']),
       bookingUrl: _str(links['booking']),
       airbnbUrl: _str(links['airbnb']),
+      choices: _choices(j['choices']),
+      options: _list(j['options']).map(StayOption.fromJson).toList(),
     );
   }
 }
@@ -166,6 +223,7 @@ class TransportOption {
   final bool livePrices;
   final List<FlightOffer> offers;
   final List<FlightOffer> cheaperDates;
+  final List<PartnerChoice> choices;
 
   const TransportOption({
     required this.kind,
@@ -178,6 +236,7 @@ class TransportOption {
     this.livePrices = false,
     this.offers = const [],
     this.cheaperDates = const [],
+    this.choices = const [],
   });
 
   factory TransportOption.fromJson(Map<String, dynamic> j) => TransportOption(
@@ -191,6 +250,7 @@ class TransportOption {
         livePrices: j['live_prices'] == true,
         offers: _list(j['offers']).map(FlightOffer.fromJson).toList(),
         cheaperDates: _list(j['cheaper_dates']).map(FlightOffer.fromJson).toList(),
+        choices: _choices(j['choices']),
       );
 }
 
@@ -256,6 +316,7 @@ class ActivityProposal {
   final String? advice;
   final String? imageUrl;
   final String? link;
+  final List<PartnerChoice> choices;
 
   const ActivityProposal({
     required this.name,
@@ -266,6 +327,7 @@ class ActivityProposal {
     this.advice,
     this.imageUrl,
     this.link,
+    this.choices = const [],
   });
 
   factory ActivityProposal.fromJson(Map<String, dynamic> j) => ActivityProposal(
@@ -277,6 +339,7 @@ class ActivityProposal {
         advice: _str(j['advice']),
         imageUrl: _str(j['image_url']),
         link: _str(j['link']),
+        choices: _choices(j['choices']),
       );
 }
 

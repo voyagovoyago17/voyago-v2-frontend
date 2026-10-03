@@ -4,10 +4,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
-import 'package:url_launcher/url_launcher.dart';
 import '../api/api_exceptions.dart';
 import '../models/trip_bookings.dart';
 import '../providers/trips_provider.dart';
+import 'partner_webview_screen.dart';
 import '../theme.dart';
 
 /// Couleurs et libellés des postes du budget
@@ -44,39 +44,19 @@ class BookingsBudgetScreen extends ConsumerStatefulWidget {
   ConsumerState<BookingsBudgetScreen> createState() => _BookingsBudgetScreenState();
 }
 
-class _BookingsBudgetScreenState extends ConsumerState<BookingsBudgetScreen> with WidgetsBindingObserver {
+class _BookingsBudgetScreenState extends ConsumerState<BookingsBudgetScreen> {
   TripBookings? _data;
   String? _error;
   int _tab = 0;
   bool _busy = false;
 
-  /// Lien partenaire ouvert : au retour dans l'app, on propose d'enregistrer la réservation
+  /// Partenaire fermé sans confirmer : « Tu as réservé ? » reste proposé
   _PendingBooking? _pending;
-  DateTime? _openedAt;
 
   @override
   void initState() {
     super.initState();
-    WidgetsBinding.instance.addObserver(this);
     _load();
-  }
-
-  @override
-  void dispose() {
-    WidgetsBinding.instance.removeObserver(this);
-    super.dispose();
-  }
-
-  @override
-  void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (state != AppLifecycleState.resumed || _pending == null) return;
-    // Ignore le simple clignotement à l'ouverture du navigateur intégré
-    if (_openedAt != null && DateTime.now().difference(_openedAt!) < const Duration(seconds: 3)) return;
-    final pending = _pending!;
-    setState(() => _pending = null);
-    Future<void>.delayed(const Duration(milliseconds: 350), () {
-      if (mounted) _askBooked(pending);
-    });
   }
 
   Future<void> _load() async {
@@ -98,21 +78,23 @@ class _BookingsBudgetScreenState extends ConsumerState<BookingsBudgetScreen> wit
   // Actions
   // ---------------------------------------------------------------------------
 
-  Future<void> _open(String url, {_PendingBooking? track}) async {
+  /// Ouvre le partenaire dans Voyagooo (WebView) ; au retour, on propose d'ajouter la dépense.
+  Future<void> _open(String url, {_PendingBooking? track, String title = 'Réservation'}) async {
     HapticFeedback.selectionClick();
-    // Navigateur intégré : on réserve sans quitter Voyagooo
-    final uri = Uri.parse(url);
-    var ok = false;
-    try {
-      ok = await launchUrl(uri, mode: LaunchMode.inAppBrowserView);
-    } catch (_) {}
-    if (!ok) ok = await launchUrl(uri, mode: LaunchMode.externalApplication);
-    if (!ok) {
-      _snack("Impossible d'ouvrir le lien", error: true);
-      return;
+    final booked = await openPartnerPage(context, url: url, title: title);
+    if (!mounted || track == null) return;
+    if (booked) {
+      setState(() => _pending = null);
+      await _askBooked(track);
+    } else {
+      setState(() => _pending = track);
     }
-    _openedAt = DateTime.now();
-    if (mounted && track != null) setState(() => _pending = track);
+  }
+
+  void _openChoice(PartnerChoice c, {required String category, required String label, int? amount}) {
+    _open(c.url,
+        title: c.label,
+        track: _PendingBooking(category: category, label: '$label · ${c.label}', amount: amount, url: c.url));
   }
 
   Future<void> _askBooked(_PendingBooking pending) async {
@@ -286,14 +268,7 @@ class _BookingsBudgetScreenState extends ConsumerState<BookingsBudgetScreen> wit
                   stay: stay,
                   multi: data.stays.length > 1,
                   fmt: _fmt,
-                  onBooking: stay.bookingUrl == null
-                      ? null
-                      : () => _open(stay.bookingUrl!,
-                          track: _PendingBooking(category: 'lodging', label: 'Hôtel · ${stay.area}', url: stay.bookingUrl)),
-                  onAirbnb: stay.airbnbUrl == null
-                      ? null
-                      : () => _open(stay.airbnbUrl!,
-                          track: _PendingBooking(category: 'lodging', label: 'Airbnb · ${stay.area}', url: stay.airbnbUrl)),
+                  onChoice: (c, area) => _openChoice(c, category: 'lodging', label: area),
                 ),
             const _PriceDisclaimer(),
           ]),
@@ -307,6 +282,7 @@ class _BookingsBudgetScreenState extends ConsumerState<BookingsBudgetScreen> wit
                   option: t,
                   fmt: _fmt,
                   onOpen: (url, price) => _open(url,
+                      title: 'Aviasales',
                       track: _PendingBooking(category: 'flights', label: 'Vols ${t.title}', amount: price, url: url)),
                   onBooked: () => _askBooked(_PendingBooking(category: 'flights', label: 'Vols ${t.title}', amount: t.price)),
                 )
@@ -314,9 +290,16 @@ class _BookingsBudgetScreenState extends ConsumerState<BookingsBudgetScreen> wit
               _TransportCard(
                 option: t,
                 fmt: _fmt,
+                onChoice: (c) => _openChoice(
+                  c,
+                  category: t.kind == 'flight' ? 'flights' : (t.kind == 'esim' ? 'other' : 'transport'),
+                  label: t.title,
+                  amount: t.price,
+                ),
                 onOpen: t.link == null
                     ? null
                     : () => _open(t.link!,
+                        title: t.title,
                         track: t.kind == 'intercity'
                             ? null
                             : _PendingBooking(
@@ -349,10 +332,7 @@ class _BookingsBudgetScreenState extends ConsumerState<BookingsBudgetScreen> wit
                   activity: a,
                   fmt: _fmt,
                   travelers: data.travelersCount,
-                  onOpen: a.link == null
-                      ? null
-                      : () => _open(a.link!,
-                          track: _PendingBooking(category: 'activities', label: a.name, amount: a.priceGroup, url: a.link)),
+                  onChoice: (c) => _openChoice(c, category: 'activities', label: a.name, amount: a.priceGroup),
                 ),
             const _PriceDisclaimer(),
           ]),
@@ -371,7 +351,7 @@ class _BookingsBudgetScreenState extends ConsumerState<BookingsBudgetScreen> wit
                   item: b,
                   fmt: _fmt,
                   onDelete: () => _remove(b),
-                  onOpen: b.url == null ? null : () => _open(b.url!),
+                  onOpen: b.url == null ? null : () => _open(b.url!, title: b.label),
                 ),
           ]),
         ];
@@ -861,16 +841,22 @@ class _StayCard extends StatelessWidget {
   final StayProposal stay;
   final bool multi;
   final String Function(num) fmt;
-  final VoidCallback? onBooking;
-  final VoidCallback? onAirbnb;
+  final void Function(PartnerChoice choice, String area) onChoice;
 
   const _StayCard({
     required this.stay,
     required this.multi,
     required this.fmt,
-    this.onBooking,
-    this.onAirbnb,
+    required this.onChoice,
   });
+
+  /// Partenaires envoyés par le serveur, sinon les deux liens historiques
+  List<PartnerChoice> get _stayChoices => stay.choices.isNotEmpty
+      ? stay.choices
+      : [
+          if (stay.bookingUrl != null) PartnerChoice(partner: 'booking', label: 'Booking.com', url: stay.bookingUrl!),
+          if (stay.airbnbUrl != null) PartnerChoice(partner: 'airbnb', label: 'Airbnb', url: stay.airbnbUrl!),
+        ];
 
   String _dates() {
     if (stay.checkin == null || stay.checkout == null) {
@@ -987,13 +973,21 @@ class _StayCard extends StatelessWidget {
             ),
           ],
           const SizedBox(height: 12),
-          Row(
-            children: [
-              Expanded(child: _PartnerButton(label: 'Booking.com', color: _bookingBlue, onTap: onBooking)),
-              const SizedBox(width: 8),
-              Expanded(child: _PartnerButton(label: 'Airbnb', color: _airbnbRed, onTap: onAirbnb)),
-            ],
-          ),
+          _PartnerChoices(choices: _stayChoices, onTap: (c) => onChoice(c, stay.area)),
+          if (stay.options.isNotEmpty) ...[
+            const SizedBox(height: 14),
+            Text(
+              fits ? 'Autres façons de dormir' : 'Pour rester dans ton budget',
+              style: TextStyle(
+                color: fits ? VoyagoColors.text : VoyagoColors.primary,
+                fontSize: 13.5,
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+            const SizedBox(height: 8),
+            for (final o in stay.options)
+              _StayOptionTile(option: o, fmt: fmt, onTap: (c) => onChoice(c, '${o.kind} · ${o.area}')),
+          ],
         ],
       ),
     );
@@ -1004,9 +998,7 @@ class _PartnerButton extends StatelessWidget {
   final String label;
   final Color color;
   final VoidCallback? onTap;
-  final IconData icon;
-
-  const _PartnerButton({required this.label, required this.color, this.onTap, this.icon = Icons.open_in_new_rounded});
+  const _PartnerButton({required this.label, required this.color, this.onTap});
 
   @override
   Widget build(BuildContext context) {
@@ -1027,7 +1019,7 @@ class _PartnerButton extends StatelessWidget {
                     style: const TextStyle(color: Colors.white, fontSize: 13.5, fontWeight: FontWeight.w800)),
               ),
               const SizedBox(width: 6),
-              Icon(icon, size: 15, color: Colors.white),
+              const Icon(Icons.open_in_new_rounded, size: 15, color: Colors.white),
             ],
           ),
         ),
@@ -1041,8 +1033,9 @@ class _TransportCard extends StatelessWidget {
   final String Function(num) fmt;
   final VoidCallback? onOpen;
   final VoidCallback onBooked;
+  final ValueChanged<PartnerChoice> onChoice;
 
-  const _TransportCard({required this.option, required this.fmt, this.onOpen, required this.onBooked});
+  const _TransportCard({required this.option, required this.fmt, this.onOpen, required this.onBooked, required this.onChoice});
 
   @override
   Widget build(BuildContext context) {
@@ -1050,7 +1043,9 @@ class _TransportCard extends StatelessWidget {
       'flight' => ('assets/icons3d/airplane.png', 'Comparer les vols'),
       'intercity' => ('assets/icons3d/bus.png', 'Voir les trajets'),
       'pass' => ('assets/icons3d/credit_card.png', ''),
-      'car' => ('assets/icons3d/departure.png', 'Trouver une agence'),
+      'car' => ('assets/icons3d/automobile.png', 'Trouver une agence'),
+      'transfer' => ('assets/icons3d/taxi.png', ''),
+      'esim' => ('assets/icons3d/phone.png', ''),
       _ => ('assets/icons3d/world_map.png', 'Voir sur la carte'),
     };
     return _Card(
@@ -1096,11 +1091,16 @@ class _TransportCard extends StatelessWidget {
                   style: TextStyle(color: VoyagoColors.muted, fontSize: 11.5)),
             ),
           const SizedBox(height: 12),
+          if (option.choices.isNotEmpty && option.kind != 'flight') ...[
+            _PartnerChoices(choices: option.choices, onTap: onChoice, showNotes: true),
+            const SizedBox(height: 8),
+          ],
           Row(
             children: [
-              if (onOpen != null && cta.isNotEmpty)
+              if (onOpen != null && cta.isNotEmpty && (option.choices.isEmpty || option.kind == 'flight'))
                 Expanded(child: _PartnerButton(label: cta, color: VoyagoColors.blue, onTap: onOpen)),
-              if (onOpen != null && cta.isNotEmpty && option.kind != 'intercity') const SizedBox(width: 8),
+              if (onOpen != null && cta.isNotEmpty && (option.choices.isEmpty || option.kind == 'flight') && option.kind != 'intercity')
+                const SizedBox(width: 8),
               if (option.kind != 'intercity')
                 Expanded(
                   child: OutlinedButton.icon(
@@ -1128,9 +1128,13 @@ class _ActivityCard extends StatelessWidget {
   final ActivityProposal activity;
   final String Function(num) fmt;
   final int travelers;
-  final VoidCallback? onOpen;
+  final ValueChanged<PartnerChoice> onChoice;
 
-  const _ActivityCard({required this.activity, required this.fmt, required this.travelers, this.onOpen});
+  const _ActivityCard({required this.activity, required this.fmt, required this.travelers, required this.onChoice});
+
+  List<PartnerChoice> get _choices => activity.choices.isNotEmpty
+      ? activity.choices
+      : [if (activity.link != null) PartnerChoice(partner: 'getyourguide', label: 'GetYourGuide', url: activity.link!)];
 
   @override
   Widget build(BuildContext context) {
@@ -1178,26 +1182,15 @@ class _ActivityCard extends StatelessWidget {
                   const SizedBox(height: 4),
                   Text(activity.advice!, style: const TextStyle(color: VoyagoColors.muted, fontSize: 12, height: 1.3)),
                 ],
-                const SizedBox(height: 10),
-                Row(
-                  children: [
-                    Text(
-                      travelers > 1 ? '~${fmt(activity.priceGroup)} pour vous $travelers' : '~${fmt(activity.priceGroup)}',
-                      style: const TextStyle(color: VoyagoColors.yellow, fontSize: 14, fontWeight: FontWeight.w900),
-                    ),
-                    const Spacer(),
-                    if (onOpen != null)
-                      SizedBox(
-                        height: 36,
-                        child: _PartnerButton(
-                          label: 'Billets',
-                          color: VoyagoColors.primary,
-                          icon: Icons.confirmation_number_rounded,
-                          onTap: onOpen,
-                        ),
-                      ),
-                  ],
+                const SizedBox(height: 8),
+                Text(
+                  travelers > 1 ? '~${fmt(activity.priceGroup)} pour vous $travelers' : '~${fmt(activity.priceGroup)}',
+                  style: const TextStyle(color: VoyagoColors.yellow, fontSize: 14, fontWeight: FontWeight.w900),
                 ),
+                if (_choices.isNotEmpty) ...[
+                  const SizedBox(height: 8),
+                  _PartnerChoices(choices: _choices, onTap: onChoice, compact: true, primaryLabel: 'Billets'),
+                ],
               ],
             ),
           ),
@@ -2084,6 +2077,193 @@ class _PendingBanner extends StatelessWidget {
             onPressed: onDismiss,
             icon: const Icon(Icons.close_rounded, size: 18, color: VoyagoColors.muted),
           ),
+        ],
+      ),
+    );
+  }
+}
+
+// =============================================================================
+// Choix des partenaires
+// =============================================================================
+
+const _partnerColors = <String, Color>{
+  'booking': _bookingBlue,
+  'airbnb': _airbnbRed,
+  'agoda': Color(0xFF5A3FD8),
+  'trip': Color(0xFF287DFA),
+  'expedia': Color(0xFFE5A100),
+  'tiqets': Color(0xFF14A49B),
+  'klook': Color(0xFFFF5B00),
+  'getyourguide': Color(0xFFFF5533),
+  'viator': Color(0xFF186B6D),
+  'kiwitaxi': Color(0xFFF5A623),
+  'welcomepickups': Color(0xFF1FB37A),
+  'gettransfer': Color(0xFFFF6A13),
+  'localrent': Color(0xFF2EB872),
+  'getrentacar': Color(0xFFD7263D),
+  'discovercars': Color(0xFFE8B10D),
+  'airalo': Color(0xFFE5484D),
+  'aviasales': Color(0xFF0C73FE),
+};
+
+Color _partnerColor(String partner) => _partnerColors[partner] ?? VoyagoColors.blue;
+
+/// Le premier partenaire en grand bouton, les autres en pastilles : plusieurs choix, un seul geste.
+class _PartnerChoices extends StatelessWidget {
+  final List<PartnerChoice> choices;
+  final ValueChanged<PartnerChoice> onTap;
+  final bool compact;
+  final bool showNotes;
+  final String? primaryLabel;
+
+  const _PartnerChoices({
+    required this.choices,
+    required this.onTap,
+    this.compact = false,
+    this.showNotes = false,
+    this.primaryLabel,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    if (choices.isEmpty) return const SizedBox.shrink();
+    final first = choices.first;
+    final others = choices.skip(1).toList();
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        _PartnerButton(
+          label: primaryLabel != null ? '$primaryLabel · ${first.label}' : 'Voir sur ${first.label}',
+          color: _partnerColor(first.partner),
+          onTap: () => onTap(first),
+        ),
+        if (showNotes && first.note != null)
+          Padding(
+            padding: const EdgeInsets.only(top: 4),
+            child: Text(first.note!, style: const TextStyle(color: VoyagoColors.muted, fontSize: 11)),
+          ),
+        if (others.isNotEmpty) ...[
+          SizedBox(height: compact ? 6 : 8),
+          Wrap(
+            spacing: 6,
+            runSpacing: 6,
+            children: [
+              for (final c in others)
+                _PartnerChip(choice: c, color: _partnerColor(c.partner), onTap: () => onTap(c)),
+            ],
+          ),
+        ],
+      ],
+    );
+  }
+}
+
+class _PartnerChip extends StatelessWidget {
+  final PartnerChoice choice;
+  final Color color;
+  final VoidCallback onTap;
+
+  const _PartnerChip({required this.choice, required this.color, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return Tooltip(
+      message: choice.note ?? choice.label,
+      child: Material(
+        color: color.withValues(alpha: 0.13),
+        borderRadius: BorderRadius.circular(12),
+        child: InkWell(
+          borderRadius: BorderRadius.circular(12),
+          onTap: onTap,
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: color.withValues(alpha: 0.45)),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(width: 7, height: 7, decoration: BoxDecoration(color: color, shape: BoxShape.circle)),
+                const SizedBox(width: 6),
+                Text(choice.label,
+                    style: const TextStyle(color: VoyagoColors.text, fontSize: 12, fontWeight: FontWeight.w700)),
+                const SizedBox(width: 4),
+                const Icon(Icons.north_east_rounded, size: 12, color: VoyagoColors.muted),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Alternative d'hébergement : type, quartier, prix par nuit et accès direct aux annonces
+class _StayOptionTile extends StatelessWidget {
+  final StayOption option;
+  final String Function(num) fmt;
+  final ValueChanged<PartnerChoice> onTap;
+
+  const _StayOptionTile({required this.option, required this.fmt, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    final color = option.fitsBudget ? VoyagoColors.primary : VoyagoColors.orange;
+    return Container(
+      margin: const EdgeInsets.only(bottom: 8),
+      padding: const EdgeInsets.all(10),
+      decoration: BoxDecoration(
+        color: VoyagoColors.background,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: color.withValues(alpha: 0.3)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(option.kind,
+                        style: const TextStyle(color: VoyagoColors.text, fontSize: 13.5, fontWeight: FontWeight.w800)),
+                    Text('📍 ${option.area}', style: const TextStyle(color: VoyagoColors.muted, fontSize: 11.5)),
+                  ],
+                ),
+              ),
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  Text(
+                    option.nightlyMax > option.nightlyMin
+                        ? '${fmt(option.nightlyMin)} – ${fmt(option.nightlyMax)}'
+                        : fmt(option.nightlyMin),
+                    style: TextStyle(color: color, fontSize: 13.5, fontWeight: FontWeight.w900),
+                  ),
+                  Text(option.fitsBudget ? 'dans ton budget' : '/ nuit',
+                      style: TextStyle(color: option.fitsBudget ? color : VoyagoColors.muted, fontSize: 10.5)),
+                ],
+              ),
+            ],
+          ),
+          if (option.why != null) ...[
+            const SizedBox(height: 4),
+            Text(option.why!, style: const TextStyle(color: VoyagoColors.muted, fontSize: 12, height: 1.3)),
+          ],
+          if (option.choices.isNotEmpty) ...[
+            const SizedBox(height: 8),
+            Wrap(
+              spacing: 6,
+              runSpacing: 6,
+              children: [
+                for (final c in option.choices) _PartnerChip(choice: c, color: _partnerColor(c.partner), onTap: () => onTap(c)),
+              ],
+            ),
+          ],
         ],
       ),
     );
