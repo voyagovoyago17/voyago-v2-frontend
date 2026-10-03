@@ -3,6 +3,7 @@ import 'package:go_router/go_router.dart';
 import '../models/app_notification.dart';
 import 'community/comments_sheet.dart';
 import 'place_review_sheet.dart';
+import 'packing/packing_sheet.dart';
 
 /// La notification mène-t-elle quelque part (écran, fiche) ?
 bool canOpenNotification(AppNotification n) {
@@ -20,7 +21,9 @@ bool canOpenNotification(AppNotification n) {
       // Un cercle privé refusé ne s'ouvre pas
       return n.data['circle_id'] != null && n.data['kind'] != 'rejected';
     case 'system':
-      return n.data['journal'] == true && (n.tripId?.isNotEmpty ?? false);
+      // Journal prêt, rappel de départ (valise) ou récap du soir
+      return (n.data['journal'] == true || n.data['packing'] == true || n.data['recap'] == true) &&
+          (n.tripId?.isNotEmpty ?? false);
     default:
       return false;
   }
@@ -55,7 +58,13 @@ void openNotificationTarget(BuildContext context, AppNotification n) {
         targetId: n.data['target_id'].toString(),
       );
     case 'system':
-      context.push('/journal/${n.tripId}');
+      if (n.data['packing'] == true) {
+        showPackingSheet(context, tripId: n.tripId!, destination: n.data['destination']?.toString() ?? 'ton voyage');
+      } else if (n.data['recap'] == true) {
+        context.go('/itinerary/${n.tripId}');
+      } else {
+        context.push('/journal/${n.tripId}');
+      }
     case 'circle_request':
       context.push('/circle/${n.data['circle_id']}');
   }

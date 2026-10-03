@@ -48,6 +48,9 @@ class ItineraryBottomSheet extends ConsumerWidget {
   /// Ajouter / modifier les dates (auteur du voyage uniquement)
   final VoidCallback? onEditDates;
 
+  /// Ouvrir la valise du voyage (auteur, voyage pas encore terminé)
+  final VoidCallback? onOpenPacking;
+
   const ItineraryBottomSheet({
     super.key,
     required this.pois,
@@ -64,6 +67,7 @@ class ItineraryBottomSheet extends ConsumerWidget {
     this.tripId,
     this.startDate,
     this.onEditDates,
+    this.onOpenPacking,
   });
 
   DateTime? get _start {
@@ -368,9 +372,17 @@ class ItineraryBottomSheet extends ConsumerWidget {
                               fontSize: 12,
                             ),
                           ),
-                          if (_tripRange != null || onEditDates != null) ...[
+                          if (_tripRange != null || onEditDates != null || onOpenPacking != null) ...[
                             const SizedBox(height: 6),
-                            _TripDatesChip(range: _tripRange, onTap: onEditDates),
+                            Wrap(
+                              spacing: 6,
+                              runSpacing: 6,
+                              children: [
+                                if (_tripRange != null || onEditDates != null)
+                                  _TripDatesChip(range: _tripRange, onTap: onEditDates),
+                                if (onOpenPacking != null) _PackingChip(onTap: onOpenPacking!),
+                              ],
+                            ),
                           ],
                         ],
                       ),
@@ -1264,6 +1276,39 @@ class _TripDatesChip extends StatelessWidget {
               const SizedBox(width: 4),
               Icon(Icons.edit_rounded, size: 11, color: color.withValues(alpha: 0.8)),
             ],
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+
+/// « 🧳 Ma valise » : liste sur mesure et dernier check avant le départ.
+class _PackingChip extends StatelessWidget {
+  final VoidCallback onTap;
+
+  const _PackingChip({required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      borderRadius: BorderRadius.circular(10),
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.fromLTRB(5, 2, 9, 2),
+        decoration: BoxDecoration(
+          color: VoyagoColors.yellow.withValues(alpha: 0.12),
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(color: VoyagoColors.yellow.withValues(alpha: 0.4)),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Image.asset('assets/icons3d/suitcase.png', width: 20, height: 20),
+            const SizedBox(width: 4),
+            const Text('Ma valise',
+                style: TextStyle(color: VoyagoColors.yellow, fontSize: 11.5, fontWeight: FontWeight.w800)),
           ],
         ),
       ),

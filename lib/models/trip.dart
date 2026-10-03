@@ -35,6 +35,10 @@ class Trip {
   /// Voyage terminé manuellement (il rejoint alors le journal).
   final DateTime? completedAt;
 
+  /// Valise : objets prêts / total (0 / 0 si pas encore préparée)
+  final int packingPacked;
+  final int packingTotal;
+
   const Trip({
     required this.id,
     required this.userId,
@@ -58,6 +62,8 @@ class Trip {
     this.remixCount = 0,
     this.remixedFromDestination,
     required this.createdAt,
+    this.packingPacked = 0,
+    this.packingTotal = 0,
     this.completedAt,
   });
 
@@ -86,6 +92,10 @@ class Trip {
       return [];
     }
 
+    final packingItems = [
+      for (final c in ((json['packing_list'] as Map?)?['categories'] as List? ?? const []))
+        if (c is Map) ...((c['items'] as List?) ?? const []),
+    ];
     return Trip(
       id: json['id']?.toString() ?? json['_id']?.toString() ?? '',
       userId:
@@ -120,6 +130,8 @@ class Trip {
               ? DateTime.tryParse(json['createdAt'].toString()) ?? DateTime.now()
               : DateTime.now(),
       completedAt: DateTime.tryParse(json['completed_at']?.toString() ?? '')?.toLocal(),
+      packingPacked: packingItems.where((e) => e is Map && e['packed'] == true).length,
+      packingTotal: packingItems.length,
     );
   }
 

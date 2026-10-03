@@ -14,6 +14,7 @@ import '../models/poi.dart';
 import '../models/day_weather.dart';
 import '../providers/auth_provider.dart';
 import '../providers/trips_provider.dart';
+import '../widgets/packing/packing_sheet.dart';
 import '../providers/notifications_provider.dart';
 import '../providers/journal_provider.dart';
 import '../services/arrival_detector.dart';
@@ -1706,6 +1707,11 @@ class _ItineraryScreenState extends ConsumerState<ItineraryScreen>
             // Seul l'auteur ajoute ou change les dates de son voyage
             onEditDates: !trip.id.startsWith('demo') && trip.userId == ref.watch(currentUserProvider)?.userId
                 ? () => _editTripDates(trip)
+                : null,
+            onOpenPacking: !trip.id.startsWith('demo') &&
+                    !trip.isPast &&
+                    trip.userId == ref.watch(currentUserProvider)?.userId
+                ? () => showPackingSheet(context, tripId: trip.id, destination: trip.city ?? trip.destination)
                 : null,
             onNavigateToPoi: _navigateToPoi,
             onDayChanged: (day) {

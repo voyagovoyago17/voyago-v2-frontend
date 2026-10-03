@@ -15,6 +15,7 @@ import 'package:flutter_earth_globe/point.dart';
 import 'package:flutter_earth_globe/point_connection.dart';
 import 'package:flutter_earth_globe/point_connection_style.dart';
 import '../widgets/crystal_nav_bar.dart';
+import '../widgets/next_trip_card.dart';
 
 class HomeScreen extends ConsumerWidget {
   const HomeScreen({super.key});
@@ -86,6 +87,12 @@ class HomeScreen extends ConsumerWidget {
                     _UserBanner(userId: user.userId)
                   else
                     _AuthBanner(onTap: () => context.go('/auth')),
+
+                  // Prochain voyage : compte à rebours, valise, ou dates à ajouter
+                  if (user != null) ...[
+                    SizedBox(height: 1.8.h.clamp(12.0, 18.0)),
+                    NextTripCard(userId: user.userId),
+                  ],
 
                   SizedBox(height: 2.2.h.clamp(18.0, 24.0)),
 

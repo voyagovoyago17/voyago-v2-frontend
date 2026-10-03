@@ -1,4 +1,5 @@
 import '../models/trip.dart';
+import '../models/packing.dart';
 import '../models/trip_gem.dart';
 import 'dio_client.dart';
 import 'endpoints.dart';
@@ -66,6 +67,30 @@ class TripsApi {
     final day = '${start.year.toString().padLeft(4, '0')}-${start.month.toString().padLeft(2, '0')}-${start.day.toString().padLeft(2, '0')}';
     final data = await _client.patch(Endpoints.tripDates(tripId), data: {'start_date': day});
     return Trip.fromJson(data as Map<String, dynamic>);
+  }
+
+  /// Valise du voyage (générée par l'IA au premier appel, quelques secondes)
+  Future<PackingList> getPacking(String tripId) async {
+    final data = await _client.get(Endpoints.tripPacking(tripId));
+    return PackingList.fromJson(data as Map<String, dynamic>);
+  }
+
+  Future<PackingList> togglePackingItem(String tripId, String itemId, bool packed) async {
+    final data = await _client.patch('${Endpoints.tripPackingItems(tripId)}/$itemId', data: {'packed': packed});
+    return PackingList.fromJson(data as Map<String, dynamic>);
+  }
+
+  Future<PackingList> addPackingItem(String tripId, String label, {String? category}) async {
+    final data = await _client.post(Endpoints.tripPackingItems(tripId), data: {
+      'label': label,
+      if (category != null) 'category': category,
+    });
+    return PackingList.fromJson(data as Map<String, dynamic>);
+  }
+
+  Future<PackingList> removePackingItem(String tripId, String itemId) async {
+    final data = await _client.delete('${Endpoints.tripPackingItems(tripId)}/$itemId');
+    return PackingList.fromJson(data as Map<String, dynamic>);
   }
 
   /// « Refaire ce voyage » : copie l'itinéraire d'un autre voyageur dans mes voyages (privé)
