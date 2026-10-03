@@ -10,6 +10,7 @@ import '../theme.dart';
 import '../widgets/journal/journal_entry_sheet.dart';
 import '../widgets/journal/journal_story_studio.dart';
 import '../widgets/journal/next_trip_ideas_card.dart';
+import '../widgets/journal/journal_budget_card.dart';
 import '../widgets/journal/journal_ui.dart';
 import '../widgets/place_review_sheet.dart';
 
@@ -66,6 +67,14 @@ class _JournalDetailScreenState extends ConsumerState<JournalDetailScreen> {
               child: _StoryCta(onTap: () => showJournalStoryStudio(context, j)),
             ),
           ),
+          // Réservations & Budget, rangé avec le voyage
+          if (j.budget != null && j.budget!.hasData)
+            SliverToBoxAdapter(
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(16, 4, 16, 8),
+                child: JournalBudgetCard(tripId: j.tripId, budget: j.budget!),
+              ),
+            ),
           SliverToBoxAdapter(child: _dayFilters(j)),
           SliverPadding(
             padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),

@@ -5,6 +5,7 @@ import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 import '../api/api_exceptions.dart';
 import '../models/trip_bookings.dart';
@@ -277,7 +278,15 @@ class _BookingsBudgetScreenState extends ConsumerState<BookingsBudgetScreen> {
                           },
                         ),
                       ],
-                      if (!data.datesKnown) ...[
+                      if (data.archived) ...[
+                        const SizedBox(height: 12),
+                        _ArchivedBanner(onJournal: () => context.push('/journal/${widget.tripId}')),
+                        const SizedBox(height: 18),
+                        Text('Tes dépenses (${data.bookings.length})',
+                            style: const TextStyle(color: VoyagoColors.text, fontSize: 15, fontWeight: FontWeight.w800)),
+                        const SizedBox(height: 10),
+                      ],
+                      if (!data.datesKnown && !data.archived) ...[
                         const SizedBox(height: 12),
                         const _InfoBanner(
                           icon: Icons.edit_calendar_rounded,
@@ -285,6 +294,7 @@ class _BookingsBudgetScreenState extends ConsumerState<BookingsBudgetScreen> {
                           text: 'Ajoute tes dates depuis l’itinéraire : les liens s’ouvriront avec les bonnes nuits et des prix réels.',
                         ),
                       ],
+                      if (!data.archived) ...[
                       const SizedBox(height: 18),
                       _Tabs(
                         index: _tab,
@@ -295,6 +305,7 @@ class _BookingsBudgetScreenState extends ConsumerState<BookingsBudgetScreen> {
                         },
                       ),
                       const SizedBox(height: 14),
+                      ],
                     ]),
                   ),
                   SliverPadding(
@@ -330,12 +341,14 @@ class _BookingsBudgetScreenState extends ConsumerState<BookingsBudgetScreen> {
   }
 
   List<Widget> _tabContent(TripBookings data) {
+    // Voyage terminé : seules les dépenses restent (le bilan complet est dans le journal)
+    final tab = data.archived ? 4 : _tab;
     Widget fade(List<Widget> children) => AnimatedSwitcher(
           duration: const Duration(milliseconds: 220),
-          child: Column(key: ValueKey(_tab), children: children),
+          child: Column(key: ValueKey(tab), children: children),
         );
 
-    switch (_tab) {
+    switch (tab) {
       case 0:
         return [
           fade([
@@ -3245,6 +3258,47 @@ class _PriceAlertRow extends StatelessWidget {
             activeTrackColor: VoyagoColors.primary,
             onChanged: busy ? null : onChanged,
           ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Voyage terminé : Réservations & Budget est rangé dans le journal
+class _ArchivedBanner extends StatelessWidget {
+  final VoidCallback onJournal;
+
+  const _ArchivedBanner({required this.onJournal});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: VoyagoColors.blue.withValues(alpha: 0.1),
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: VoyagoColors.blue.withValues(alpha: 0.35)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Row(
+            children: [
+              Text('🏁', style: TextStyle(fontSize: 20)),
+              SizedBox(width: 8),
+              Expanded(
+                child: Text('Voyage terminé',
+                    style: TextStyle(color: VoyagoColors.text, fontSize: 15, fontWeight: FontWeight.w900)),
+              ),
+            ],
+          ),
+          const SizedBox(height: 4),
+          const Text(
+            'Ce budget est rangé dans ton journal avec tes souvenirs. Tu peux encore ajouter une dépense oubliée.',
+            style: TextStyle(color: VoyagoColors.muted, fontSize: 12.5, height: 1.35),
+          ),
+          const SizedBox(height: 10),
+          _PartnerButton(label: 'Voir le bilan dans le journal', color: VoyagoColors.blue, onTap: onJournal),
         ],
       ),
     );

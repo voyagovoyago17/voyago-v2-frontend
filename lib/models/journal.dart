@@ -57,6 +57,55 @@ class JournalStats {
       distanceKm >= 10 ? '${distanceKm.round()} km' : '${distanceKm.toStringAsFixed(1)} km';
 }
 
+/// Réservations & Budget, archivé avec le voyage.
+class JournalBudget {
+  final String currency;
+  final int total;
+  final int spent;
+  final int flightsSpent;
+  final bool announcedBudget;
+  final Map<String, int> allocation;
+  final Map<String, int> spentBy;
+  final List<({String category, String label, int amount})> bookings;
+  final bool hasData;
+
+  const JournalBudget({
+    required this.currency,
+    required this.total,
+    required this.spent,
+    this.flightsSpent = 0,
+    this.announcedBudget = false,
+    this.allocation = const {},
+    this.spentBy = const {},
+    this.bookings = const [],
+    this.hasData = false,
+  });
+
+  static Map<String, int> _ints(dynamic v) =>
+      v is Map ? v.map((k, val) => MapEntry('$k', (val as num?)?.round() ?? 0)) : const {};
+
+  factory JournalBudget.fromJson(Map<String, dynamic> j) => JournalBudget(
+        currency: j['currency']?.toString() ?? 'EUR',
+        total: (j['total'] as num?)?.round() ?? 0,
+        spent: (j['spent'] as num?)?.round() ?? 0,
+        flightsSpent: (j['flights_spent'] as num?)?.round() ?? 0,
+        announcedBudget: j['announced_budget'] == true,
+        allocation: _ints(j['allocation']),
+        spentBy: _ints(j['spent_by']),
+        bookings: (j['bookings'] as List? ?? [])
+            .whereType<Map>()
+            .map((b) => (
+                  category: b['category']?.toString() ?? 'other',
+                  label: b['label']?.toString() ?? '',
+                  amount: (b['amount'] as num?)?.round() ?? 0,
+                ))
+            .toList(),
+        hasData: j['has_data'] == true || (j['spent'] as num? ?? 0) > 0,
+      );
+
+  bool get withinBudget => spent <= total;
+}
+
 /// Titre débloqué par le voyage.
 class JournalBadge {
   final String title;
@@ -82,6 +131,8 @@ class JournalTripSummary {
   final bool journalShared;
   final JournalBadge badge;
   final JournalStats stats;
+  /// Budget en bref (null si rien n'a été suivi)
+  final JournalBudget? budget;
 
   const JournalTripSummary({
     required this.tripId,
@@ -94,6 +145,7 @@ class JournalTripSummary {
     this.journalShared = false,
     required this.badge,
     required this.stats,
+    this.budget,
   });
 
   factory JournalTripSummary.fromJson(Map<String, dynamic> j) => JournalTripSummary(
@@ -107,6 +159,7 @@ class JournalTripSummary {
         journalShared: j['journal_shared'] == true,
         badge: JournalBadge.fromJson(j['badge'] as Map<String, dynamic>?),
         stats: JournalStats.fromJson(j['stats'] as Map<String, dynamic>?),
+        budget: j['budget'] is Map ? JournalBudget.fromJson(Map<String, dynamic>.from(j['budget'] as Map)) : null,
       );
 }
 
@@ -219,6 +272,7 @@ class JournalDetail {
   final JournalBadge badge;
   final JournalStats stats;
   final List<JournalDay> days;
+  final JournalBudget? budget;
 
   const JournalDetail({
     required this.tripId,
@@ -233,6 +287,7 @@ class JournalDetail {
     required this.badge,
     required this.stats,
     this.days = const [],
+    this.budget,
   });
 
   factory JournalDetail.fromJson(Map<String, dynamic> j) => JournalDetail(
@@ -248,6 +303,7 @@ class JournalDetail {
         badge: JournalBadge.fromJson(j['badge'] as Map<String, dynamic>?),
         stats: JournalStats.fromJson(j['stats'] as Map<String, dynamic>?),
         days: (j['days'] as List? ?? []).map((e) => JournalDay.fromJson(e as Map<String, dynamic>)).toList(),
+        budget: j['budget'] is Map ? JournalBudget.fromJson(Map<String, dynamic>.from(j['budget'] as Map)) : null,
       );
 
   String get shortDestination => destination.split(',').first.trim();

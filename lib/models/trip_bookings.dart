@@ -621,6 +621,8 @@ class TripBookings {
   final PassCompare? passCompare;
   final TripPlan? plan;
   final PriceAlertState? priceAlert;
+  /// Voyage terminé : bilan figé, rangé dans le journal
+  final bool archived;
   final bool estimatesAvailable;
   /// ready | pending (calcul en cours) | failed
   final String estimatesStatus;
@@ -646,6 +648,7 @@ class TripBookings {
     this.passCompare,
     this.plan,
     this.priceAlert,
+    this.archived = false,
     required this.estimatesAvailable,
     this.estimatesStatus = 'ready',
   });
@@ -675,6 +678,7 @@ class TripBookings {
       passCompare: _map(j['pass_compare']) == null ? null : PassCompare.fromJson(_map(j['pass_compare'])!),
       plan: _map(j['plan']) == null ? null : TripPlan.fromJson(_map(j['plan'])!),
       priceAlert: _map(j['price_alert']) == null ? null : PriceAlertState.fromJson(_map(j['price_alert'])!),
+      archived: j['archived'] == true,
       estimatesAvailable: j['estimates_available'] == true,
       estimatesStatus: '${j['estimates_status'] ?? (j['estimates_available'] == true ? 'ready' : 'failed')}',
     );

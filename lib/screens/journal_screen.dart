@@ -1,5 +1,6 @@
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../models/journal.dart';
@@ -284,7 +285,15 @@ class _JournalTripCard extends StatelessWidget {
                         color: VoyagoColors.primary,
                         text: '${s.visitedCount}/${s.placesCount} lieux',
                       ),
-                      _MiniStat(icon: Icons.favorite_rounded, color: VoyagoColors.coral, text: '${s.favoritesCount}'),
+                      if (trip.budget != null)
+                        _MiniStat(
+                          icon: Icons.account_balance_wallet_rounded,
+                          color: trip.budget!.withinBudget ? VoyagoColors.yellow : VoyagoColors.orange,
+                          text: NumberFormat.simpleCurrency(locale: 'fr_FR', name: trip.budget!.currency, decimalDigits: 0)
+                              .format(trip.budget!.spent),
+                        )
+                      else
+                        _MiniStat(icon: Icons.favorite_rounded, color: VoyagoColors.coral, text: '${s.favoritesCount}'),
                     ],
                   ),
                   const SizedBox(height: 12),
