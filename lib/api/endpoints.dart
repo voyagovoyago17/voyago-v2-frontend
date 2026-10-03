@@ -53,6 +53,10 @@ class Endpoints {
   static String leaveCircle(String circleId) => '/api/community/circles/$circleId/leave';
   static String circleJoinRequests(String circleId) => '/api/community/circles/$circleId/join-requests';
   static String circleAccess(String circleId) => '/api/community/circles/$circleId/access';
+  static String circleInvites(String circleId) => '/api/community/circles/$circleId/invites';
+  static String joinRequestVouch(String requestId) => '/api/community/join-requests/$requestId/vouch';
+  static const String myCircles = '/api/community/me/circles';
+  static const String myJoinRequests = '/api/community/me/join-requests';
   static String circleMembers(String circleId) => '/api/community/circles/$circleId/members';
   static String circleMember(String circleId, String userId) => '/api/community/circles/$circleId/members/$userId';
   static String joinRequestDecision(String requestId, String decision) =>

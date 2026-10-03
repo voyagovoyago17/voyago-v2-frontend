@@ -75,8 +75,14 @@ class CommunityCircle {
   /// 'pending' | 'rejected' | null
   final String? myRequestStatus;
 
-  /// Demandes en attente (fondateur / admins)
+  /// Demandes en attente (visibles des membres pour le parrainage)
   final int pendingRequestsCount;
+
+  /// Période d'essai des nouveaux membres (jours)
+  final int trialDays;
+
+  /// Ma période de découverte (lecture seule) se termine le…
+  final DateTime? myTrialUntil;
 
   const CommunityCircle({
     required this.id,
@@ -109,6 +115,8 @@ class CommunityCircle {
     this.joinQuestion = '',
     this.myRequestStatus,
     this.pendingRequestsCount = 0,
+    this.trialDays = 0,
+    this.myTrialUntil,
   });
 
   bool get canManage => myRole == 'creator' || myRole == 'admin';
@@ -163,6 +171,8 @@ class CommunityCircle {
       joinQuestion: json['join_question']?.toString() ?? '',
       myRequestStatus: json['my_request_status']?.toString(),
       pendingRequestsCount: (json['pending_requests_count'] as num?)?.toInt() ?? 0,
+      trialDays: (json['trial_days'] as num?)?.toInt() ?? 0,
+      myTrialUntil: DateTime.tryParse(json['my_trial_until']?.toString() ?? '')?.toLocal(),
     );
   }
 
@@ -205,6 +215,8 @@ class CommunityCircle {
       joinQuestion: joinQuestion,
       myRequestStatus: myRequestStatus,
       pendingRequestsCount: pendingRequestsCount,
+      trialDays: trialDays,
+      myTrialUntil: myTrialUntil,
     );
   }
 

@@ -226,6 +226,14 @@ class TravelerDrawer extends ConsumerWidget {
                     },
                   ),
                   _NavTile(
+                    icon: Icons.admin_panel_settings_outlined,
+                    label: 'Paramètres des tribus',
+                    onTap: () {
+                      Navigator.of(context).pop();
+                      context.push('/tribe-settings');
+                    },
+                  ),
+                  _NavTile(
                     icon: Icons.workspace_premium_outlined,
                     label: 'Voyagooo Pro',
                     badge: 'PRO',

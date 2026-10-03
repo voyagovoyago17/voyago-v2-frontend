@@ -1,5 +1,7 @@
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:share_plus/share_plus.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../api/api_exceptions.dart';
@@ -8,6 +10,7 @@ import '../../models/community_circle.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/community_provider.dart';
 import '../../theme.dart';
+import '../location_pickers.dart';
 
 // =============================================================================
 // Conditions d'accès (carte du cercle, demande d'adhésion)
@@ -795,7 +798,7 @@ class CircleAccessManagerCard extends StatelessWidget {
           InkWell(
             borderRadius: BorderRadius.circular(12),
             onTap: () => showCircleAccessSettingsSheet(context, circle),
-            child: _QuotaBar(members: circle.membersCount, quota: circle.joinRules.maxMembers),
+            child: QuotaBar(members: circle.membersCount, quota: circle.joinRules.maxMembers),
           ),
           const SizedBox(height: 12),
           Row(
@@ -820,6 +823,102 @@ class CircleAccessManagerCard extends StatelessWidget {
               ),
             ],
           ),
+          const SizedBox(height: 10),
+          Row(
+            children: [
+              Expanded(
+                child: _ManagerButton(
+                  icon: Icons.confirmation_number_rounded,
+                  label: 'Invitations',
+                  onTap: () => showCircleInvitesSheet(context, circle),
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: _ManagerButton(
+                  icon: Icons.groups_rounded,
+                  label: 'Membres',
+                  onTap: () => showCircleMembersSheet(context, circle),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Membre (non gestionnaire) : demandes en attente à parrainer.
+class SponsorRequestsCard extends StatelessWidget {
+  final CommunityCircle circle;
+
+  const SponsorRequestsCard({super.key, required this.circle});
+
+  @override
+  Widget build(BuildContext context) {
+    final n = circle.pendingRequestsCount;
+    return InkWell(
+      borderRadius: BorderRadius.circular(16),
+      onTap: () => showJoinRequestsSheet(context, circle),
+      child: Container(
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(
+          color: VoyagoColors.blue.withValues(alpha: 0.08),
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: VoyagoColors.blue.withValues(alpha: 0.35)),
+        ),
+        child: Row(
+          children: [
+            const Text('🤝', style: TextStyle(fontSize: 22)),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text('$n voyageur${n > 1 ? 's' : ''} veu${n > 1 ? 'lent' : 't'} rejoindre la tribu',
+                      style: const TextStyle(color: VoyagoColors.text, fontSize: 13.5, fontWeight: FontWeight.w700)),
+                  const Text('Tu en connais un ? Porte-toi garant pour l\'aider à entrer.',
+                      style: TextStyle(color: VoyagoColors.muted, fontSize: 12)),
+                ],
+              ),
+            ),
+            const Icon(Icons.chevron_right_rounded, color: VoyagoColors.muted),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// Bandeau de période de découverte (nouveau membre en lecture seule).
+class TrialBanner extends StatelessWidget {
+  final DateTime until;
+
+  const TrialBanner({super.key, required this.until});
+
+  @override
+  Widget build(BuildContext context) {
+    final d = until;
+    final date = '${d.day.toString().padLeft(2, '0')}/${d.month.toString().padLeft(2, '0')}';
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: VoyagoColors.primary.withValues(alpha: 0.08),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: VoyagoColors.primary.withValues(alpha: 0.35)),
+      ),
+      child: Row(
+        children: [
+          const Text('🌱', style: TextStyle(fontSize: 22)),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Text(
+              'Période de découverte jusqu\'au $date : explore les voyages et les moments de la tribu. '
+              'Tu pourras publier et commenter ensuite.',
+              style: const TextStyle(color: VoyagoColors.text, fontSize: 12.5, height: 1.4),
+            ),
+          ),
         ],
       ),
     );
@@ -827,11 +926,11 @@ class CircleAccessManagerCard extends StatelessWidget {
 }
 
 /// Quota de membres : jauge (quota fixé) ou « libre ».
-class _QuotaBar extends StatelessWidget {
+class QuotaBar extends StatelessWidget {
   final int members;
   final int? quota;
 
-  const _QuotaBar({required this.members, this.quota});
+  const QuotaBar({super.key, required this.members, this.quota});
 
   @override
   Widget build(BuildContext context) {
@@ -947,7 +1046,10 @@ class _JoinRequestsSheet extends ConsumerWidget {
                 const Icon(Icons.person_add_alt_1_rounded, color: VoyagoColors.yellow),
                 const SizedBox(width: 10),
                 Expanded(
-                  child: Text('Demandes · ${circle.name}',
+                  child: Text(
+                      (async.valueOrNull?.canDecide ?? circle.canManage)
+                          ? 'Demandes · ${circle.name}'
+                          : 'Parrainer · ${circle.name}',
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: const TextStyle(color: VoyagoColors.text, fontSize: 17, fontWeight: FontWeight.w800)),
@@ -990,7 +1092,12 @@ class _JoinRequestsSheet extends ConsumerWidget {
                   itemCount: data.requests.length,
                   separatorBuilder: (_, __) => const SizedBox(height: 12),
                   itemBuilder: (_, i) =>
-                      _JoinRequestCard(circle: circle, request: data.requests[i], question: data.question),
+                      _JoinRequestCard(
+                    circle: circle,
+                    request: data.requests[i],
+                    question: data.question,
+                    canDecide: data.canDecide,
+                  ),
                 );
               },
             ),
@@ -1006,7 +1113,9 @@ class _JoinRequestCard extends ConsumerStatefulWidget {
   final JoinRequest request;
   final String question;
 
-  const _JoinRequestCard({required this.circle, required this.request, required this.question});
+  final bool canDecide;
+
+  const _JoinRequestCard({required this.circle, required this.request, required this.question, this.canDecide = true});
 
   @override
   ConsumerState<_JoinRequestCard> createState() => _JoinRequestCardState();
@@ -1014,6 +1123,28 @@ class _JoinRequestCard extends ConsumerStatefulWidget {
 
 class _JoinRequestCardState extends ConsumerState<_JoinRequestCard> {
   bool? _deciding; // true = accepter, false = refuser
+  bool _vouching = false;
+
+  Future<void> _toggleVouch() async {
+    setState(() => _vouching = true);
+    final messenger = ScaffoldMessenger.of(context);
+    final on = !widget.request.iVouched;
+    try {
+      await ref
+          .read(communityControllerProvider)
+          .vouchJoinRequest(circleId: widget.circle.id, requestId: widget.request.id, on: on);
+      messenger.showSnackBar(SnackBar(
+        backgroundColor: on ? VoyagoColors.primary : VoyagoColors.surface,
+        content: Text(on
+            ? '🤝 Tu te portes garant de ${widget.request.user.displayName}'
+            : 'Parrainage retiré'),
+      ));
+    } on ApiException catch (e) {
+      messenger.showSnackBar(SnackBar(backgroundColor: VoyagoColors.coral, content: Text(e.message)));
+    } finally {
+      if (mounted) setState(() => _vouching = false);
+    }
+  }
 
   Future<void> _decide(bool accept) async {
     setState(() => _deciding = accept);
@@ -1151,7 +1282,39 @@ class _JoinRequestCardState extends ConsumerState<_JoinRequestCard> {
               style: const TextStyle(color: VoyagoColors.coral, fontSize: 12, fontWeight: FontWeight.w600),
             ),
           ],
+          if (r.vouches.isNotEmpty) ...[
+            const SizedBox(height: 10),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+              decoration: BoxDecoration(
+                color: VoyagoColors.blue.withValues(alpha: 0.1),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Text(
+                '🤝 Parrainé par ${r.vouches.take(3).map((v) => '${v.emoji} ${v.name}').join(', ')}'
+                '${r.vouches.length > 3 ? ' et ${r.vouches.length - 3} autre${r.vouches.length - 3 > 1 ? 's' : ''}' : ''}',
+                style: const TextStyle(color: VoyagoColors.blue, fontSize: 12, fontWeight: FontWeight.w700),
+              ),
+            ),
+          ],
           const SizedBox(height: 12),
+          if (!widget.canDecide)
+            SizedBox(
+              width: double.infinity,
+              child: OutlinedButton.icon(
+                onPressed: _vouching ? null : _toggleVouch,
+                icon: Text(r.iVouched ? '✅' : '🤝', style: const TextStyle(fontSize: 16)),
+                label: Text(r.iVouched ? 'Tu es son garant · retirer' : 'Je me porte garant',
+                    style: TextStyle(
+                        color: r.iVouched ? VoyagoColors.muted : VoyagoColors.blue, fontWeight: FontWeight.w700)),
+                style: OutlinedButton.styleFrom(
+                  side: BorderSide(color: VoyagoColors.blue.withValues(alpha: 0.5)),
+                  padding: const EdgeInsets.symmetric(vertical: 12),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                ),
+              ),
+            )
+          else
           Row(
             children: [
               Expanded(
@@ -1250,6 +1413,7 @@ class _AccessSettingsSheetState extends ConsumerState<_AccessSettingsSheet> {
   late JoinRules _rules = widget.circle.joinRules;
   late bool _autoApprove = widget.circle.autoApprove;
   late bool _listed = widget.circle.listed;
+  late int _trialDays = widget.circle.trialDays;
   late final TextEditingController _question = TextEditingController(text: widget.circle.joinQuestion);
   bool _saving = false;
 
@@ -1269,6 +1433,7 @@ class _AccessSettingsSheetState extends ConsumerState<_AccessSettingsSheet> {
             autoApprove: _autoApprove,
             joinQuestion: _question.text,
             listed: widget.circle.isPublic ? null : _listed,
+            trialDays: _trialDays,
           );
       if (!mounted) return;
       Navigator.pop(context);
@@ -1372,6 +1537,30 @@ class _AccessSettingsSheetState extends ConsumerState<_AccessSettingsSheet> {
                   value: _rules.verifiedEmail,
                   onChanged: (v) => setState(() => _rules = _rules.copyWith(verifiedEmail: v)),
                 ),
+                _CountriesRule(
+                  countries: _rules.countries,
+                  onChanged: (list) => setState(() => _rules = _rules.copyWith(countries: list)),
+                ),
+                const Divider(color: VoyagoColors.cardBorder, height: 28),
+                const Text("Intégration des nouveaux membres",
+                    style: TextStyle(color: VoyagoColors.text, fontSize: 15, fontWeight: FontWeight.w800)),
+                const SizedBox(height: 10),
+                _SelectRow<int>(
+                  icon: Icons.spa_rounded,
+                  label: 'Période de découverte',
+                  value: _trialDays,
+                  options: const [0, 1, 3, 7, 14, 30],
+                  display: (v) => v == 0 ? 'Aucune' : '$v jour${v > 1 ? 's' : ''}',
+                  onChanged: (v) => setState(() => _trialDays = v),
+                ),
+                if (_trialDays > 0)
+                  const Padding(
+                    padding: EdgeInsets.only(left: 4, bottom: 10),
+                    child: Text(
+                      'Les nouveaux membres lisent tout mais ne publient, ne partagent et ne commentent qu\'après cette période.',
+                      style: TextStyle(color: VoyagoColors.muted, fontSize: 11.5, height: 1.35),
+                    ),
+                  ),
                 if (isPrivate) ...[
                   const Divider(color: VoyagoColors.cardBorder, height: 28),
                   _SwitchRow(
@@ -1426,6 +1615,75 @@ class _AccessSettingsSheetState extends ConsumerState<_AccessSettingsSheet> {
             ),
           ),
         ),
+      ),
+    );
+  }
+}
+
+/// Pays autorisés : pastilles + ajout via la liste des pays.
+class _CountriesRule extends StatelessWidget {
+  final List<String> countries;
+  final ValueChanged<List<String>> onChanged;
+
+  const _CountriesRule({required this.countries, required this.onChanged});
+
+  Future<void> _add(BuildContext context) async {
+    final picked = await pickCountry(context);
+    if (picked == null || picked.trim().isEmpty) return;
+    if (countries.any((c) => c.toLowerCase() == picked.toLowerCase())) return;
+    onChanged([...countries, picked]);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 10),
+      padding: const EdgeInsets.fromLTRB(12, 10, 12, 12),
+      decoration: BoxDecoration(color: VoyagoColors.surface, borderRadius: BorderRadius.circular(14)),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Icon(Icons.public_rounded, size: 19, color: VoyagoColors.primary),
+              const SizedBox(width: 10),
+              const Expanded(
+                child: Text('Pays autorisés', style: TextStyle(color: VoyagoColors.text, fontSize: 13.5)),
+              ),
+              Text(countries.isEmpty ? 'Tous' : '${countries.length} pays',
+                  style: const TextStyle(color: VoyagoColors.primary, fontWeight: FontWeight.w700, fontSize: 13.5)),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Wrap(
+            spacing: 6,
+            runSpacing: 6,
+            children: [
+              for (final c in countries)
+                InputChip(
+                  label: Text(c, style: const TextStyle(color: VoyagoColors.text, fontSize: 12)),
+                  backgroundColor: VoyagoColors.background,
+                  side: const BorderSide(color: VoyagoColors.cardBorder),
+                  deleteIconColor: VoyagoColors.muted,
+                  onDeleted: () => onChanged(countries.where((x) => x != c).toList()),
+                ),
+              ActionChip(
+                avatar: const Icon(Icons.add_rounded, size: 16, color: VoyagoColors.primary),
+                label: const Text('Ajouter un pays',
+                    style: TextStyle(color: VoyagoColors.primary, fontSize: 12, fontWeight: FontWeight.w700)),
+                backgroundColor: VoyagoColors.primary.withValues(alpha: 0.08),
+                side: BorderSide(color: VoyagoColors.primary.withValues(alpha: 0.4)),
+                onPressed: () => _add(context),
+              ),
+            ],
+          ),
+          if (countries.isNotEmpty)
+            const Padding(
+              padding: EdgeInsets.only(top: 6),
+              child: Text("D'après le pays indiqué dans le profil du voyageur.",
+                  style: TextStyle(color: VoyagoColors.muted, fontSize: 11)),
+            ),
+        ],
       ),
     );
   }
@@ -1840,6 +2098,304 @@ class _CircleMembersSheetState extends ConsumerState<_CircleMembersSheet> {
                       );
                     },
                   ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// =============================================================================
+// Codes d'invitation à usage limité (fondateur / admins)
+// =============================================================================
+
+Future<void> showCircleInvitesSheet(BuildContext context, CommunityCircle circle) {
+  return showModalBottomSheet<void>(
+    context: context,
+    isScrollControlled: true,
+    backgroundColor: Colors.transparent,
+    builder: (_) => DraggableScrollableSheet(
+      initialChildSize: 0.8,
+      minChildSize: 0.5,
+      maxChildSize: 0.95,
+      expand: false,
+      builder: (_, scroll) => _InvitesSheet(circle: circle, scrollController: scroll),
+    ),
+  );
+}
+
+class _InvitesSheet extends ConsumerStatefulWidget {
+  final CommunityCircle circle;
+  final ScrollController scrollController;
+
+  const _InvitesSheet({required this.circle, required this.scrollController});
+
+  @override
+  ConsumerState<_InvitesSheet> createState() => _InvitesSheetState();
+}
+
+class _InvitesSheetState extends ConsumerState<_InvitesSheet> {
+  static const _durations = <int?>[null, 1, 24, 72, 168, 720];
+  static const _uses = <int?>[null, 1, 5, 10, 25, 50, 100];
+
+  final _label = TextEditingController();
+  int? _hours = 168;
+  int? _maxUses = 10;
+  bool _creating = false;
+
+  @override
+  void dispose() {
+    _label.dispose();
+    super.dispose();
+  }
+
+  static String _durationLabel(int? h) => switch (h) {
+        null => 'Sans limite',
+        1 => '1 heure',
+        24 => '24 heures',
+        72 => '3 jours',
+        168 => '7 jours',
+        720 => '30 jours',
+        _ => '$h h',
+      };
+
+  Future<void> _create() async {
+    setState(() => _creating = true);
+    final messenger = ScaffoldMessenger.of(context);
+    try {
+      final invite = await ref
+          .read(communityControllerProvider)
+          .createInvite(widget.circle.id, label: _label.text, maxUses: _maxUses, expiresInHours: _hours);
+      _label.clear();
+      await Clipboard.setData(ClipboardData(text: invite.code));
+      messenger.showSnackBar(SnackBar(
+        backgroundColor: VoyagoColors.primary,
+        content: Text('🎟️ Code ${invite.code} créé et copié'),
+      ));
+    } on ApiException catch (e) {
+      messenger.showSnackBar(SnackBar(backgroundColor: VoyagoColors.coral, content: Text(e.message)));
+    } finally {
+      if (mounted) setState(() => _creating = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final async = ref.watch(circleInvitesProvider(widget.circle.id));
+    return Container(
+      decoration: const BoxDecoration(
+        color: VoyagoColors.background,
+        borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+      ),
+      child: ListView(
+        controller: widget.scrollController,
+        padding: EdgeInsets.fromLTRB(18, 12, 18, 24 + MediaQuery.of(context).viewInsets.bottom),
+        children: [
+          Center(
+            child: Container(
+              width: 40,
+              height: 4,
+              decoration: BoxDecoration(color: VoyagoColors.cardBorder, borderRadius: BorderRadius.circular(2)),
+            ),
+          ),
+          const SizedBox(height: 14),
+          const Text("Codes d'invitation",
+              style: TextStyle(color: VoyagoColors.text, fontSize: 19, fontWeight: FontWeight.w800)),
+          const SizedBox(height: 4),
+          const Text(
+            "Des codes à durée ou à nombre d'utilisations limités, à partager sans risque. "
+            "Les conditions d'accès s'appliquent toujours.",
+            style: TextStyle(color: VoyagoColors.muted, fontSize: 12.5, height: 1.4),
+          ),
+          const SizedBox(height: 14),
+          Container(
+            padding: const EdgeInsets.all(14),
+            decoration: BoxDecoration(
+              color: VoyagoColors.surface,
+              borderRadius: BorderRadius.circular(18),
+              border: Border.all(color: VoyagoColors.cardBorder),
+            ),
+            child: Column(
+              children: [
+                TextField(
+                  controller: _label,
+                  maxLength: 60,
+                  style: const TextStyle(color: VoyagoColors.text, fontSize: 14),
+                  decoration: InputDecoration(
+                    hintText: 'Libellé (ex : Amis de Lyon)',
+                    hintStyle: const TextStyle(color: VoyagoColors.muted, fontSize: 13),
+                    counterText: '',
+                    isDense: true,
+                    filled: true,
+                    fillColor: VoyagoColors.background,
+                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
+                  ),
+                ),
+                const SizedBox(height: 10),
+                _SelectRow<int?>(
+                  icon: Icons.timer_outlined,
+                  label: 'Valable',
+                  value: _hours,
+                  options: _durations,
+                  display: _durationLabel,
+                  onChanged: (v) => setState(() => _hours = v),
+                ),
+                _SelectRow<int?>(
+                  icon: Icons.people_alt_outlined,
+                  label: 'Utilisations',
+                  value: _maxUses,
+                  options: _uses,
+                  display: (v) => v == null ? 'Illimitées' : '$v max.',
+                  onChanged: (v) => setState(() => _maxUses = v),
+                ),
+                SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton.icon(
+                    onPressed: _creating ? null : _create,
+                    icon: const Icon(Icons.add_rounded, size: 18),
+                    label: const Text('Créer un code', style: TextStyle(fontWeight: FontWeight.w800)),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: VoyagoColors.primary,
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(vertical: 13),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                      elevation: 0,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 16),
+          async.when(
+            loading: () => const Padding(
+              padding: EdgeInsets.all(24),
+              child: Center(child: CircularProgressIndicator(color: VoyagoColors.primary)),
+            ),
+            error: (e, _) => Text(e.toString(), style: const TextStyle(color: VoyagoColors.muted)),
+            data: (invites) => invites.isEmpty
+                ? const Padding(
+                    padding: EdgeInsets.all(20),
+                    child: Text('Aucun code pour le moment.',
+                        textAlign: TextAlign.center, style: TextStyle(color: VoyagoColors.muted)),
+                  )
+                : Column(children: [for (final i in invites) _InviteTile(circle: widget.circle, invite: i)]),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _InviteTile extends ConsumerWidget {
+  final CommunityCircle circle;
+  final CircleInviteCode invite;
+
+  const _InviteTile({required this.circle, required this.invite});
+
+  String get _details {
+    final parts = <String>[
+      invite.maxUses == null ? '${invite.uses} utilisation${invite.uses > 1 ? 's' : ''}' : '${invite.uses}/${invite.maxUses} utilisations',
+    ];
+    final e = invite.expiresAt;
+    if (e != null) {
+      final left = e.difference(DateTime.now());
+      parts.add(left.isNegative
+          ? 'expiré'
+          : left.inHours < 1
+              ? 'expire dans ${left.inMinutes} min'
+              : left.inHours < 48
+                  ? 'expire dans ${left.inHours} h'
+                  : 'expire dans ${left.inDays} j');
+    } else {
+      parts.add('sans expiration');
+    }
+    return parts.join(' · ');
+  }
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final (statusLabel, statusColor) = switch (invite.status) {
+      'expired' => ('Expiré', VoyagoColors.muted),
+      'exhausted' => ('Épuisé', VoyagoColors.orange),
+      _ => ('Actif', VoyagoColors.primary),
+    };
+    return Container(
+      margin: const EdgeInsets.only(bottom: 10),
+      padding: const EdgeInsets.fromLTRB(14, 12, 6, 12),
+      decoration: BoxDecoration(
+        color: VoyagoColors.surface,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: invite.isActive ? VoyagoColors.primary.withValues(alpha: 0.3) : VoyagoColors.cardBorder),
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Flexible(
+                      child: Text(invite.code,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          color: invite.isActive ? VoyagoColors.text : VoyagoColors.muted,
+                          fontSize: 16,
+                          fontWeight: FontWeight.w800,
+                          letterSpacing: 2,
+                        )),
+                    ),
+                    const SizedBox(width: 8),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
+                      decoration: BoxDecoration(
+                        color: statusColor.withValues(alpha: 0.15),
+                        borderRadius: BorderRadius.circular(6),
+                      ),
+                      child: Text(statusLabel,
+                          style: TextStyle(color: statusColor, fontSize: 10, fontWeight: FontWeight.w800)),
+                    ),
+                  ],
+                ),
+                if (invite.label.isNotEmpty)
+                  Text(invite.label, style: const TextStyle(color: VoyagoColors.text, fontSize: 12.5)),
+                Text(_details, style: const TextStyle(color: VoyagoColors.muted, fontSize: 11.5)),
+              ],
+            ),
+          ),
+          if (invite.isActive) ...[
+            IconButton(
+              tooltip: 'Copier',
+              icon: const Icon(Icons.copy_rounded, size: 19, color: VoyagoColors.muted),
+              onPressed: () async {
+                await Clipboard.setData(ClipboardData(text: invite.code));
+                if (context.mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Code copié')));
+                }
+              },
+            ),
+            IconButton(
+              tooltip: 'Partager',
+              icon: const Icon(Icons.ios_share_rounded, size: 19, color: VoyagoColors.primary),
+              onPressed: () => SharePlus.instance.share(ShareParams(
+                text: 'Rejoins ma tribu « ${circle.name} » sur Voyagooo 🦜\n'
+                    'Code d\'invitation : ${invite.code}',
+              )),
+            ),
+          ],
+          IconButton(
+            tooltip: 'Supprimer',
+            icon: const Icon(Icons.delete_outline_rounded, size: 19, color: VoyagoColors.coral),
+            onPressed: () async {
+              final messenger = ScaffoldMessenger.of(context);
+              try {
+                await ref.read(communityControllerProvider).revokeInvite(circle.id, invite.code);
+                messenger.showSnackBar(SnackBar(content: Text('Code ${invite.code} désactivé')));
+              } on ApiException catch (e) {
+                messenger.showSnackBar(SnackBar(backgroundColor: VoyagoColors.coral, content: Text(e.message)));
+              }
+            },
           ),
         ],
       ),

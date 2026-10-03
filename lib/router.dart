@@ -20,6 +20,7 @@ import 'screens/onboarding_screen.dart';
 import 'screens/welcome_screen.dart';
 import 'screens/journal_screen.dart';
 import 'screens/journal_detail_screen.dart';
+import 'screens/tribe_settings_screen.dart';
 
 class RouterNotifier extends ChangeNotifier {
   final Ref _ref;
@@ -151,6 +152,15 @@ final routerProvider = Provider<GoRouter>((ref) {
           circleId: state.pathParameters['circleId'] ?? '',
           planId: state.pathParameters['planId'] ?? '',
         ),
+      ),
+      // Paramètres des tribus (sidebar) : accès et vie privée des cercles
+      GoRoute(
+        path: '/tribe-settings',
+        builder: (context, state) => const TribeSettingsScreen(),
+      ),
+      GoRoute(
+        path: '/tribe-settings/:circleId',
+        builder: (context, state) => CircleSettingsScreen(circleId: state.pathParameters['circleId']!),
       ),
       GoRoute(
         path: '/journal',

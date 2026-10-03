@@ -1417,6 +1417,13 @@ class _ProfileContentState extends ConsumerState<_ProfileContent> {
         'description': 'A réussi un premier défi de cercle avec sa tribu.',
       },
       {
+        'id': 'fondateur_actif',
+        'title': 'Fondateur Actif',
+        'tier': 'Tier 2',
+        'emoji': '⚡',
+        'description': 'A répondu à 5 demandes de tribu en moins de 24 h.',
+      },
+      {
         'id': 'voyago_pro',
         'title': 'Voyagooo Pro',
         'tier': 'Tier 3',

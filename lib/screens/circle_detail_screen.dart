@@ -436,6 +436,18 @@ class _CircleDetailScreenState extends ConsumerState<CircleDetailScreen> {
                         const SizedBox(height: 14),
                       ],
 
+                      // Membre : demandes à parrainer
+                      if (circle.isMember && !circle.canManage && circle.pendingRequestsCount > 0) ...[
+                        SponsorRequestsCard(circle: circle),
+                        const SizedBox(height: 14),
+                      ],
+
+                      // Nouveau membre : période de découverte (lecture seule)
+                      if (circle.myTrialUntil != null) ...[
+                        TrialBanner(until: circle.myTrialUntil!),
+                        const SizedBox(height: 14),
+                      ],
+
                       // ACTION BUTTONS BAR
                       Row(
                         children: [

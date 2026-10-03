@@ -29,7 +29,17 @@ class JoinRules {
   final bool verifiedEmail;
   final int? maxMembers;
 
-  const JoinRules({this.minLevel, this.minAge, this.proOnly = false, this.verifiedEmail = false, this.maxMembers});
+  /// Pays autorisés (vide = tous)
+  final List<String> countries;
+
+  const JoinRules({
+    this.minLevel,
+    this.minAge,
+    this.proOnly = false,
+    this.verifiedEmail = false,
+    this.maxMembers,
+    this.countries = const [],
+  });
 
   factory JoinRules.fromJson(dynamic raw) {
     final json = raw is Map ? Map<String, dynamic>.from(raw) : const <String, dynamic>{};
@@ -39,6 +49,7 @@ class JoinRules {
       proOnly: json['pro_only'] == true,
       verifiedEmail: json['verified_email'] == true,
       maxMembers: (json['max_members'] as num?)?.toInt(),
+      countries: json['countries'] is List ? (json['countries'] as List).map((e) => e.toString()).toList() : const [],
     );
   }
 
@@ -49,9 +60,11 @@ class JoinRules {
         'pro_only': proOnly,
         'verified_email': verifiedEmail,
         'max_members': maxMembers,
+        'countries': countries,
       };
 
-  bool get isEmpty => minLevel == null && minAge == null && !proOnly && !verifiedEmail && maxMembers == null;
+  bool get isEmpty =>
+      minLevel == null && minAge == null && !proOnly && !verifiedEmail && maxMembers == null && countries.isEmpty;
 
   /// Libellés courts pour la carte du cercle
   List<String> get chips => [
@@ -60,6 +73,8 @@ class JoinRules {
         if (proOnly) 'Pro',
         if (verifiedEmail) 'E-mail vérifié',
         if (maxMembers != null) '$maxMembers places',
+        if (countries.length == 1) '📍 ${countries.first}',
+        if (countries.length > 1) '📍 ${countries.length} pays',
       ];
 
   JoinRules copyWith({
@@ -68,6 +83,7 @@ class JoinRules {
     bool? proOnly,
     bool? verifiedEmail,
     int? Function()? maxMembers,
+    List<String>? countries,
   }) =>
       JoinRules(
         minLevel: minLevel != null ? minLevel() : this.minLevel,
@@ -75,6 +91,7 @@ class JoinRules {
         proOnly: proOnly ?? this.proOnly,
         verifiedEmail: verifiedEmail ?? this.verifiedEmail,
         maxMembers: maxMembers != null ? maxMembers() : this.maxMembers,
+        countries: countries ?? this.countries,
       );
 }
 
@@ -146,6 +163,10 @@ class JoinRequest {
   final List<JoinCheck> checks;
   final JoinRequester user;
 
+  /// Membres qui se portent garants (prénom/pseudo + emoji)
+  final List<({String userId, String name, String emoji})> vouches;
+  final bool iVouched;
+
   const JoinRequest({
     required this.id,
     required this.status,
@@ -154,6 +175,8 @@ class JoinRequest {
     this.eligible = true,
     this.checks = const [],
     required this.user,
+    this.vouches = const [],
+    this.iVouched = false,
   });
 
   factory JoinRequest.fromJson(Map<String, dynamic> json) => JoinRequest(
@@ -164,6 +187,147 @@ class JoinRequest {
         eligible: json['eligible'] != false,
         checks: JoinCheck.listFrom(json['join_checks']),
         user: JoinRequester.fromJson(Map<String, dynamic>.from(json['user'] as Map? ?? const {})),
+        vouches: (json['vouches'] as List? ?? [])
+            .whereType<Map>()
+            .map((v) => (
+                  userId: v['user_id']?.toString() ?? '',
+                  name: v['name']?.toString() ?? 'Membre',
+                  emoji: v['avatar_emoji']?.toString() ?? '🧭',
+                ))
+            .toList(),
+        iVouched: json['i_vouched'] == true,
+      );
+}
+
+/// Demandes d'un cercle vues par un membre (canDecide = fondateur / admin).
+class JoinRequestsPage {
+  final List<JoinRequest> requests;
+  final String question;
+  final bool canDecide;
+
+  const JoinRequestsPage({required this.requests, this.question = '', this.canDecide = false});
+
+  factory JoinRequestsPage.fromJson(Map<String, dynamic> json) => JoinRequestsPage(
+        requests: (json['requests'] as List? ?? [])
+            .whereType<Map>()
+            .map((e) => JoinRequest.fromJson(Map<String, dynamic>.from(e)))
+            .toList(),
+        question: json['join_question']?.toString() ?? '',
+        canDecide: json['can_decide'] == true,
+      );
+}
+
+/// Code d'invitation à usage limité.
+class CircleInviteCode {
+  final String code;
+  final String label;
+  final int? maxUses;
+  final int uses;
+  final DateTime? expiresAt;
+
+  /// 'active' | 'expired' | 'exhausted' | 'revoked'
+  final String status;
+
+  const CircleInviteCode({
+    required this.code,
+    this.label = '',
+    this.maxUses,
+    this.uses = 0,
+    this.expiresAt,
+    this.status = 'active',
+  });
+
+  factory CircleInviteCode.fromJson(Map<String, dynamic> json) => CircleInviteCode(
+        code: json['code']?.toString() ?? '',
+        label: json['label']?.toString() ?? '',
+        maxUses: (json['max_uses'] as num?)?.toInt(),
+        uses: (json['uses'] as num?)?.toInt() ?? 0,
+        expiresAt: DateTime.tryParse(json['expires_at']?.toString() ?? '')?.toLocal(),
+        status: json['status']?.toString() ?? 'active',
+      );
+
+  bool get isActive => status == 'active';
+}
+
+/// Un de mes cercles (menu Paramètres des tribus).
+class MyCircle {
+  final String id;
+  final String name;
+  final String avatarEmoji;
+  final bool isPublic;
+  final bool listed;
+  final String myRole;
+  final int membersCount;
+  final JoinRules joinRules;
+  final bool autoApprove;
+  final int trialDays;
+  final DateTime? trialUntil;
+  final int pendingRequestsCount;
+  final bool canManage;
+
+  const MyCircle({
+    required this.id,
+    required this.name,
+    this.avatarEmoji = '🧭',
+    this.isPublic = true,
+    this.listed = true,
+    this.myRole = 'explorer',
+    this.membersCount = 0,
+    this.joinRules = const JoinRules(),
+    this.autoApprove = false,
+    this.trialDays = 0,
+    this.trialUntil,
+    this.pendingRequestsCount = 0,
+    this.canManage = false,
+  });
+
+  factory MyCircle.fromJson(Map<String, dynamic> json) => MyCircle(
+        id: json['id']?.toString() ?? '',
+        name: json['name']?.toString() ?? 'Cercle',
+        avatarEmoji: json['avatar_emoji']?.toString() ?? '🧭',
+        isPublic: json['is_public'] == true,
+        listed: json['listed'] != false,
+        myRole: json['my_role']?.toString() ?? 'explorer',
+        membersCount: (json['members_count'] as num?)?.toInt() ?? 0,
+        joinRules: JoinRules.fromJson(json['join_rules']),
+        autoApprove: json['auto_approve'] == true,
+        trialDays: (json['trial_days'] as num?)?.toInt() ?? 0,
+        trialUntil: DateTime.tryParse(json['trial_until']?.toString() ?? '')?.toLocal(),
+        pendingRequestsCount: (json['pending_requests_count'] as num?)?.toInt() ?? 0,
+        canManage: json['can_manage'] == true,
+      );
+
+  String get visibilityLabel => isPublic ? 'Public' : (listed ? 'Privé · sur demande' : 'Secret · sur code');
+}
+
+/// Une de mes demandes d'adhésion.
+class MyJoinRequest {
+  final String id;
+  final String circleId;
+  final String circleName;
+  final String circleEmoji;
+  final String status;
+  final DateTime? createdAt;
+  final int vouchesCount;
+
+  const MyJoinRequest({
+    required this.id,
+    required this.circleId,
+    required this.circleName,
+    this.circleEmoji = '🧭',
+    this.status = 'pending',
+    this.createdAt,
+    this.vouchesCount = 0,
+  });
+
+  factory MyJoinRequest.fromJson(Map<String, dynamic> json) => MyJoinRequest(
+        id: json['id']?.toString() ?? '',
+        circleId: json['circle_id']?.toString() ?? '',
+        circleName: json['circle_name']?.toString() ?? 'Cercle',
+        circleEmoji: json['circle_emoji']?.toString() ?? '🧭',
+        status: json['status']?.toString() ?? 'pending',
+        createdAt: DateTime.tryParse(json['created_at']?.toString() ?? '')?.toLocal(),
+        vouchesCount: (json['vouches_count'] as num?)?.toInt() ?? 0,
       );
 }
 

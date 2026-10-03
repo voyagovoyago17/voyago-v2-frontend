@@ -168,9 +168,24 @@ final circleDetailProvider = FutureProvider.family<CommunityCircle, String>((ref
 
 /// Posts & moments d'un cercle spécifique
 /// Demandes d'adhésion d'un cercle (fondateur / admins)
-final circleJoinRequestsProvider =
-    FutureProvider.autoDispose.family<({List<JoinRequest> requests, String question}), String>((ref, circleId) {
+final circleJoinRequestsProvider = FutureProvider.autoDispose.family<JoinRequestsPage, String>((ref, circleId) {
   return ref.watch(communityApiProvider).getJoinRequests(circleId);
+});
+
+/// Codes d'invitation à usage limité d'un cercle (fondateur / admins)
+final circleInvitesProvider = FutureProvider.autoDispose.family<List<CircleInviteCode>, String>((ref, circleId) {
+  return ref.watch(communityApiProvider).getInvites(circleId);
+});
+
+/// Menu Paramètres des tribus : mes cercles et mes demandes
+final myCirclesProvider = FutureProvider.autoDispose<List<MyCircle>>((ref) {
+  ref.watch(currentUserProvider);
+  return ref.watch(communityApiProvider).getMyCircles();
+});
+
+final myJoinRequestsProvider = FutureProvider.autoDispose<List<MyJoinRequest>>((ref) {
+  ref.watch(currentUserProvider);
+  return ref.watch(communityApiProvider).getMyJoinRequests();
 });
 
 final circlePostsProvider = FutureProvider.family<List<CommunityPost>, String>((ref, circleId) async {
@@ -261,6 +276,7 @@ class CommunityController {
     await _api.cancelJoinRequest(circleId);
     _ref.invalidate(communityCirclesProvider);
     _ref.invalidate(circleDetailProvider(circleId));
+    _ref.invalidate(myJoinRequestsProvider);
   }
 
   Future<void> decideJoinRequest({required String circleId, required String requestId, required bool accept}) async {
@@ -268,6 +284,7 @@ class CommunityController {
     _ref.invalidate(circleJoinRequestsProvider(circleId));
     _ref.invalidate(circleDetailProvider(circleId));
     _ref.invalidate(communityCirclesProvider);
+    _ref.invalidate(myCirclesProvider);
   }
 
   Future<void> updateCircleAccess(
@@ -276,11 +293,29 @@ class CommunityController {
     required bool autoApprove,
     required String joinQuestion,
     bool? listed,
+    int? trialDays,
   }) async {
     await _api.updateCircleAccess(circleId,
-        rules: rules, autoApprove: autoApprove, joinQuestion: joinQuestion, listed: listed);
+        rules: rules, autoApprove: autoApprove, joinQuestion: joinQuestion, listed: listed, trialDays: trialDays);
     _ref.invalidate(circleDetailProvider(circleId));
     _ref.invalidate(communityCirclesProvider);
+    _ref.invalidate(myCirclesProvider);
+  }
+
+  Future<void> vouchJoinRequest({required String circleId, required String requestId, required bool on}) async {
+    await _api.vouchJoinRequest(requestId, on: on);
+    _ref.invalidate(circleJoinRequestsProvider(circleId));
+  }
+
+  Future<CircleInviteCode> createInvite(String circleId, {String? label, int? maxUses, int? expiresInHours}) async {
+    final invite = await _api.createInvite(circleId, label: label, maxUses: maxUses, expiresInHours: expiresInHours);
+    _ref.invalidate(circleInvitesProvider(circleId));
+    return invite;
+  }
+
+  Future<void> revokeInvite(String circleId, String code) async {
+    await _api.revokeInvite(circleId, code);
+    _ref.invalidate(circleInvitesProvider(circleId));
   }
 
   Future<void> removeCircleMember(String circleId, String userId) async {

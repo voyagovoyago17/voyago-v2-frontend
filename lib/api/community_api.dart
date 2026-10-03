@@ -371,14 +371,48 @@ class CommunityApi {
 
   Future<void> cancelJoinRequest(String circleId) => _client.delete(Endpoints.circleJoinRequests(circleId));
 
-  /// Demandes reçues par le cercle (fondateur / admins)
-  Future<({List<JoinRequest> requests, String question})> getJoinRequests(String circleId) async {
-    final data = await _client.get(Endpoints.circleJoinRequests(circleId)) as Map<String, dynamic>;
-    final list = (data['requests'] as List? ?? [])
+  /// Demandes reçues par le cercle (membres : parrainage ; fondateur / admins : décision)
+  Future<JoinRequestsPage> getJoinRequests(String circleId) async {
+    final data = await _client.get(Endpoints.circleJoinRequests(circleId));
+    return JoinRequestsPage.fromJson(data as Map<String, dynamic>);
+  }
+
+  Future<void> vouchJoinRequest(String requestId, {required bool on}) => on
+      ? _client.post(Endpoints.joinRequestVouch(requestId))
+      : _client.delete(Endpoints.joinRequestVouch(requestId));
+
+  /// Codes d'invitation à usage limité
+  Future<List<CircleInviteCode>> getInvites(String circleId) async {
+    final data = await _client.get(Endpoints.circleInvites(circleId)) as Map<String, dynamic>;
+    return (data['invites'] as List? ?? [])
         .whereType<Map>()
-        .map((e) => JoinRequest.fromJson(Map<String, dynamic>.from(e)))
+        .map((e) => CircleInviteCode.fromJson(Map<String, dynamic>.from(e)))
         .toList();
-    return (requests: list, question: data['join_question']?.toString() ?? '');
+  }
+
+  Future<CircleInviteCode> createInvite(String circleId, {String? label, int? maxUses, int? expiresInHours}) async {
+    final data = await _client.post(Endpoints.circleInvites(circleId), data: {
+      if (label != null && label.trim().isNotEmpty) 'label': label.trim(),
+      if (maxUses != null) 'max_uses': maxUses,
+      if (expiresInHours != null) 'expires_in_hours': expiresInHours,
+    });
+    return CircleInviteCode.fromJson(data as Map<String, dynamic>);
+  }
+
+  Future<void> revokeInvite(String circleId, String code) => _client.delete('${Endpoints.circleInvites(circleId)}/$code');
+
+  /// Mes cercles (rôle, demandes en attente, essai) et mes demandes d'adhésion
+  Future<List<MyCircle>> getMyCircles() async {
+    final data = await _client.get(Endpoints.myCircles) as Map<String, dynamic>;
+    return (data['circles'] as List? ?? []).whereType<Map>().map((e) => MyCircle.fromJson(Map<String, dynamic>.from(e))).toList();
+  }
+
+  Future<List<MyJoinRequest>> getMyJoinRequests() async {
+    final data = await _client.get(Endpoints.myJoinRequests) as Map<String, dynamic>;
+    return (data['requests'] as List? ?? [])
+        .whereType<Map>()
+        .map((e) => MyJoinRequest.fromJson(Map<String, dynamic>.from(e)))
+        .toList();
   }
 
   Future<void> decideJoinRequest(String requestId, {required bool accept}) =>
@@ -391,12 +425,14 @@ class CommunityApi {
     required bool autoApprove,
     required String joinQuestion,
     bool? listed,
+    int? trialDays,
   }) =>
       _client.patch(Endpoints.circleAccess(circleId), data: {
         'join_rules': rules.toJson(),
         'auto_approve': autoApprove,
         'join_question': joinQuestion.trim(),
         if (listed != null) 'listed': listed,
+        if (trialDays != null) 'trial_days': trialDays,
       });
 
   /// Membres du cercle, page par page
