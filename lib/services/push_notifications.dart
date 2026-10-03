@@ -152,7 +152,12 @@ final pushNotificationsProvider = Provider<void>((ref) {
     if (!ref.read(isAuthenticatedProvider)) return;
     final n = PushNotifications.toAppNotification(message);
     // Bandeau en haut + son signature (une seule fois si le flux temps réel l'a déjà montrée)
-    InAppNotifications.instance.present(ref, n, sound: message.data['sound'] != '0');
+    InAppNotifications.instance.present(
+      ref,
+      n,
+      sound: message.data['sound'] != '0',
+      vibrate: message.data['vibrate'] != '0',
+    );
   }));
 
   // Push touché alors que l'app tournait en arrière-plan

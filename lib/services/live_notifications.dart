@@ -33,11 +33,11 @@ class InAppNotifications {
     return false;
   }
 
-  void present(Ref ref, AppNotification n, {required bool sound}) {
+  void present(Ref ref, AppNotification n, {required bool sound, bool vibrate = true}) {
     if (n.title.isEmpty || _alreadySeen(n.id)) return;
     ref.read(notificationsProvider.notifier).refresh();
     pulse.value++;
-    if (sound) AppSounds.instance.notification();
+    AppSounds.instance.notification(sound: sound, vibrate: vibrate);
     final navigator = ref.read(routerProvider).routerDelegate.navigatorKey.currentState;
     final overlay = navigator?.overlay;
     if (overlay == null) return;
@@ -145,7 +145,7 @@ class _LiveStream with WidgetsBindingObserver {
     try {
       final json = Map<String, dynamic>.from(jsonDecode(raw) as Map);
       final n = AppNotification.fromJson(json);
-      InAppNotifications.instance.present(ref, n, sound: json['sound'] != false);
+      InAppNotifications.instance.present(ref, n, sound: json['sound'] != false, vibrate: json['vibrate'] != false);
     } catch (e) {
       debugPrint('Notification temps réel illisible : $e');
     }

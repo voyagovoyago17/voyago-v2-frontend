@@ -445,13 +445,25 @@ class TravelerDrawer extends ConsumerWidget {
             const Divider(color: VoyagoColors.cardBorder, height: 1),
             Padding(
               padding: const EdgeInsets.all(12),
-              child: _NavTile(
-                icon: Icons.settings_outlined,
-                label: 'Profil & Paramètres',
-                onTap: () {
-                  Navigator.of(context).pop();
-                  context.go('/profile');
-                },
+              child: Column(
+                children: [
+                  _NavTile(
+                    icon: Icons.tune_rounded,
+                    label: 'Réglages (notifications, navigation)',
+                    onTap: () {
+                      Navigator.of(context).pop();
+                      context.push('/settings');
+                    },
+                  ),
+                  _NavTile(
+                    icon: Icons.settings_outlined,
+                    label: 'Profil & Paramètres',
+                    onTap: () {
+                      Navigator.of(context).pop();
+                      context.go('/profile');
+                    },
+                  ),
+                ],
               ),
             ),
           ],

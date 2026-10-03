@@ -8,7 +8,6 @@ import 'package:flutter_map_location_marker/flutter_map_location_marker.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:go_router/go_router.dart';
-import 'package:url_launcher/url_launcher.dart';
 import '../models/trip.dart';
 import '../models/poi.dart';
 import '../models/day_weather.dart';
@@ -37,6 +36,8 @@ import '../widgets/map_ambiance_overlay.dart';
 import '../widgets/place_review_sheet.dart';
 import '../widgets/trip_manage_sheet.dart';
 import '../models/trip_edits.dart';
+import '../services/app_settings.dart';
+import '../services/navigation_links.dart';
 
 class ItineraryScreen extends ConsumerStatefulWidget {
   final String tripId;
@@ -468,14 +469,49 @@ class _ItineraryScreenState extends ConsumerState<ItineraryScreen>
     _computeNavigationRoute(poi);
     _animatedMapController.animateTo(dest: LatLng(poi.lat, poi.lng), zoom: 15.5);
 
-    // Proposer d'ouvrir dans une app externe (Google Maps / Apple Maps)
-    _showNavigationChoiceSheet(poi);
+    // App choisie dans les réglages : ouverte directement ; sinon on propose le choix
+    final app = ref.read(appSettingsProvider).navApp;
+    if (app == NavApp.ask) {
+      _showNavigationChoiceSheet(poi);
+    } else if (app != NavApp.voyagooo) {
+      _openExternalNavigation(app, poi);
+      _showSafeSnackBar(SnackBar(
+        behavior: SnackBarBehavior.floating,
+        content: Text('🧭 Ouverture dans ${app.label}'),
+        action: SnackBarAction(label: 'Autre app', onPressed: () => _showNavigationChoiceSheet(poi)),
+      ));
+    }
+  }
+
+  /// Mode de déplacement vers ce lieu (selon les transports du voyage et la distance)
+  TravelMode _modeTo(POI poi) {
+    final from = _liveUserPosition;
+    final meters = from == null ? 0.0 : RouteService.straightLineDistance(from, LatLng(poi.lat, poi.lng));
+    return TravelMode.forTrip(_currentTrip?.transports ?? const [], meters);
+  }
+
+  void _openExternalNavigation(NavApp app, POI poi) {
+    final from = _liveUserPosition;
+    final uri = switch (app) {
+      NavApp.waze => NavigationLinks.waze(poi.lat, poi.lng),
+      NavApp.apple => NavigationLinks.apple(poi.lat, poi.lng, mode: _modeTo(poi)),
+      _ => NavigationLinks.google(poi.lat, poi.lng, fromLat: from?.latitude, fromLng: from?.longitude, mode: _modeTo(poi)),
+    };
+    NavigationLinks.open(uri);
   }
 
   /// Affiche un bottom sheet pour choisir l'app de navigation externe.
   void _showNavigationChoiceSheet(POI poi) {
     if (!mounted) return;
-    final userPos = _liveUserPosition;
+    final settings = ref.read(appSettingsProvider);
+    // En voiture (ou loin), Waze passe en tête : trafic en direct
+    final drive = _modeTo(poi) == TravelMode.car;
+    final apps = [
+      if (drive) NavApp.waze,
+      NavApp.google,
+      if (!drive) NavApp.waze,
+      if (NavigationLinks.appleAvailable) NavApp.apple,
+    ]..sort((a, b) => (a == settings.navApp ? 0 : 1).compareTo(b == settings.navApp ? 0 : 1));
     showModalBottomSheet(
       context: context,
       backgroundColor: VoyagoColors.surface,
@@ -522,33 +558,43 @@ class _ItineraryScreenState extends ConsumerState<ItineraryScreen>
                 icon: Icons.directions_walk,
                 label: 'Suivre sur Voyagooo',
                 subtitle: 'Itinéraire affiché sur la carte',
+                badge: settings.navApp == NavApp.voyagooo ? 'Ton choix' : null,
                 onTap: () => Navigator.pop(ctx),
               ),
               const SizedBox(height: 8),
-              _NavOption(
-                icon: Icons.map_outlined,
-                label: 'Google Maps',
-                subtitle: 'Navigation vocale guidée',
-                onTap: () {
+              for (final app in apps)
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 8),
+                  child: _NavOption(
+                    icon: switch (app) {
+                      NavApp.waze => Icons.navigation_rounded,
+                      NavApp.apple => Icons.map_rounded,
+                      _ => Icons.map_outlined,
+                    },
+                    label: app.label,
+                    subtitle: switch (app) {
+                      NavApp.waze => [
+                          'Trafic en temps réel, radars et bouchons',
+                          if (settings.avoidTolls || settings.avoidFerries || settings.avoidFreeways) 'tes options « éviter »',
+                        ].join(' · '),
+                      NavApp.apple => 'Navigation guidée ${_modeTo(poi).label}',
+                      _ => 'Navigation vocale guidée ${_modeTo(poi).label}',
+                    },
+                    badge: app == settings.navApp
+                        ? 'Ton choix'
+                        : (app == NavApp.waze && drive ? 'Conseillé en voiture' : null),
+                    onTap: () {
+                      Navigator.pop(ctx);
+                      _openExternalNavigation(app, poi);
+                    },
+                  ),
+                ),
+              TextButton(
+                onPressed: () {
                   Navigator.pop(ctx);
-                  final origin = userPos != null
-                      ? '${userPos.latitude},${userPos.longitude}'
-                      : '';
-                  final dest = '${poi.lat},${poi.lng}';
-                  final url = 'https://www.google.com/maps/dir/$origin/$dest/@${poi.lat},${poi.lng},15z/data=!4m2!4m1!3e2';
-                  launchUrl(Uri.parse(url), mode: LaunchMode.externalApplication);
+                  context.push('/settings?tab=navigation');
                 },
-              ),
-              const SizedBox(height: 8),
-              _NavOption(
-                icon: Icons.navigation_rounded,
-                label: 'Waze',
-                subtitle: 'Navigation en temps réel',
-                onTap: () {
-                  Navigator.pop(ctx);
-                  final url = 'https://waze.com/ul?ll=${poi.lat},${poi.lng}&navigate=yes';
-                  launchUrl(Uri.parse(url), mode: LaunchMode.externalApplication);
-                },
+                child: const Text('Choisir mon app par défaut et mes options (péages, ferries…)'),
               ),
             ],
           ),
@@ -1934,12 +1980,14 @@ class _NavOption extends StatelessWidget {
   final String label;
   final String subtitle;
   final VoidCallback onTap;
+  final String? badge;
 
   const _NavOption({
     required this.icon,
     required this.label,
     required this.subtitle,
     required this.onTap,
+    this.badge,
   });
 
   @override
@@ -1969,13 +2017,31 @@ class _NavOption extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(
-                    label,
-                    style: const TextStyle(
-                      color: VoyagoColors.text,
-                      fontSize: 14,
-                      fontWeight: FontWeight.w700,
-                    ),
+                  Row(
+                    children: [
+                      Flexible(
+                        child: Text(
+                          label,
+                          style: const TextStyle(
+                            color: VoyagoColors.text,
+                            fontSize: 14,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                      ),
+                      if (badge != null) ...[
+                        const SizedBox(width: 6),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
+                          decoration: BoxDecoration(
+                            color: VoyagoColors.primary.withValues(alpha: 0.15),
+                            borderRadius: BorderRadius.circular(6),
+                          ),
+                          child: Text(badge!,
+                              style: const TextStyle(color: VoyagoColors.primary, fontSize: 10, fontWeight: FontWeight.w800)),
+                        ),
+                      ],
+                    ],
                   ),
                   Text(
                     subtitle,

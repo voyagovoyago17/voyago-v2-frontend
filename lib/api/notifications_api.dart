@@ -62,14 +62,14 @@ class NotificationsApi {
   Future<void> unregisterDevice(String token) => _client.delete(Endpoints.notificationDevices, data: {'token': token});
 
   /// Préférences : son signature, push sociaux, heures calmes (22 h–8 h)
-  Future<Map<String, bool>> getPrefs() async {
+  Future<Map<String, dynamic>> getPrefs() async {
     final data = await _client.get(Endpoints.notificationPrefs);
-    return {for (final e in (data as Map).entries) e.key.toString(): e.value == true};
+    return Map<String, dynamic>.from(data as Map);
   }
 
-  Future<Map<String, bool>> updatePrefs(Map<String, bool> changes) async {
+  Future<Map<String, dynamic>> updatePrefs(Map<String, dynamic> changes) async {
     final data = await _client.patch(Endpoints.notificationPrefs, data: changes);
-    return {for (final e in (data as Map).entries) e.key.toString(): e.value == true};
+    return Map<String, dynamic>.from(data as Map);
   }
 
   /// Notification de test (bandeau, son et push sur mes appareils)

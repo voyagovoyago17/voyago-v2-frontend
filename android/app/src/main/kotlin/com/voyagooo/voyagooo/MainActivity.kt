@@ -36,6 +36,16 @@ class MainActivity : FlutterActivity() {
             },
         )
 
+        // Vibration seule (réglage du voyageur)
+        manager.createNotificationChannel(
+            NotificationChannel("voyagooo_vibrate", "Alertes en vibration", NotificationManager.IMPORTANCE_HIGH).apply {
+                description = "Tes alertes de voyage avec vibration, sans son"
+                setSound(null, null)
+                enableVibration(true)
+                vibrationPattern = longArrayOf(0, 180, 120, 180)
+            },
+        )
+
         // Sans son : heures calmes et interactions sociales en rafale
         manager.createNotificationChannel(
             NotificationChannel("voyagooo_quiet", "Notifications discrètes", NotificationManager.IMPORTANCE_DEFAULT).apply {

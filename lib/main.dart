@@ -6,6 +6,7 @@ import 'core/config/app_environment.dart';
 import 'services/app_rating_service.dart';
 import 'services/push_notifications.dart';
 import 'services/live_notifications.dart';
+import 'services/app_settings.dart';
 import 'services/storage_service.dart';
 import 'router.dart';
 import 'theme.dart';
@@ -32,6 +33,8 @@ class VoyagoApp extends ConsumerWidget {
     final router = ref.watch(routerProvider);
     ref.watch(pushNotificationsProvider);
     ref.watch(liveNotificationsProvider);
+    // Réglages locaux (volume, mode, navigation) chargés dès le lancement
+    ref.watch(appSettingsProvider);
 
     return Sizer(
       builder: (context, orientation, deviceType) {

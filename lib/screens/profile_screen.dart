@@ -17,7 +17,6 @@ import '../services/storage_service.dart';
 import '../theme.dart';
 import '../widgets/trip_card.dart';
 import '../widgets/shard_wallet_card.dart';
-import '../widgets/notification_prefs_card.dart';
 import '../widgets/trip_visibility_sheet.dart';
 import '../widgets/email_verification_sheet.dart';
 
@@ -802,8 +801,24 @@ class _ProfileContentState extends ConsumerState<_ProfileContent> {
 
             const SizedBox(height: 32),
 
-            // Réglages des notifications (son, social, heures calmes)
-            const NotificationPrefsCard(),
+            // Réglages : notifications (son, vibration, volume) et navigation (Waze, péages…)
+            Material(
+              color: VoyagoColors.surface,
+              clipBehavior: Clip.antiAlias,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(18),
+                side: const BorderSide(color: VoyagoColors.cardBorder),
+              ),
+              child: ListTile(
+                onTap: () => context.push('/settings'),
+                leading: const Icon(Icons.settings_rounded, color: VoyagoColors.primary),
+                title: const Text('Réglages',
+                    style: TextStyle(color: VoyagoColors.text, fontWeight: FontWeight.w800)),
+                subtitle: const Text('Son, vibration, volume, heures calmes · navigation, Waze, péages',
+                    style: TextStyle(color: VoyagoColors.muted, fontSize: 12)),
+                trailing: const Icon(Icons.chevron_right_rounded, color: VoyagoColors.muted),
+              ),
+            ),
 
             const SizedBox(height: 32),
 
