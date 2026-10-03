@@ -610,6 +610,8 @@ class TripBookings {
   final TripPlan? plan;
   final PriceAlertState? priceAlert;
   final bool estimatesAvailable;
+  /// ready | pending (calcul en cours) | failed
+  final String estimatesStatus;
 
   const TripBookings({
     required this.tripId,
@@ -633,6 +635,7 @@ class TripBookings {
     this.plan,
     this.priceAlert,
     required this.estimatesAvailable,
+    this.estimatesStatus = 'ready',
   });
 
   int get travelersCount => adults + childrenAges.length;
@@ -661,6 +664,7 @@ class TripBookings {
       plan: _map(j['plan']) == null ? null : TripPlan.fromJson(_map(j['plan'])!),
       priceAlert: _map(j['price_alert']) == null ? null : PriceAlertState.fromJson(_map(j['price_alert'])!),
       estimatesAvailable: j['estimates_available'] == true,
+      estimatesStatus: '${j['estimates_status'] ?? (j['estimates_available'] == true ? 'ready' : 'failed')}',
     );
   }
 }

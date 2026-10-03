@@ -59,26 +59,46 @@ class _BookingsBudgetScreenState extends ConsumerState<BookingsBudgetScreen> {
   PriceAlertState? _alert;
   bool _alertBusy = false;
 
+  /// Estimations IA en cours côté serveur : on rafraîchit tout seul toutes les 4 s
+  Timer? _poll;
+  int _polls = 0;
+  static const _maxPolls = 15;
+
   @override
   void initState() {
     super.initState();
     _load();
   }
 
-  Future<void> _load() async {
-    setState(() => _error = null);
+  @override
+  void dispose() {
+    _poll?.cancel();
+    super.dispose();
+  }
+
+  Future<void> _load({bool retry = false, bool silent = false}) async {
+    _poll?.cancel();
+    if (!silent) setState(() => _error = null);
     try {
-      final data = await ref.read(tripsApiProvider).getBookings(widget.tripId);
-      if (mounted) {
-        setState(() {
-          _data = data;
-          _alert = data.priceAlert ?? _alert;
+      final data = await ref.read(tripsApiProvider).getBookings(widget.tripId, retry: retry);
+      if (!mounted) return;
+      setState(() {
+        _data = data;
+        _alert = data.priceAlert ?? _alert;
+      });
+      if (data.estimatesStatus == 'pending' && _polls < _maxPolls) {
+        _poll = Timer(const Duration(seconds: 4), () {
+          _polls++;
+          _load(silent: true);
         });
+      } else {
+        _polls = 0;
       }
     } on ApiException catch (e) {
-      if (mounted) setState(() => _error = e.message);
+      // Rafraîchissement silencieux : on garde l'écran affiché
+      if (mounted && (!silent || _data == null)) setState(() => _error = e.message);
     } catch (_) {
-      if (mounted) setState(() => _error = 'Impossible de charger tes réservations pour le moment.');
+      if (mounted && (!silent || _data == null)) setState(() => _error = 'Impossible de charger tes réservations pour le moment.');
     }
   }
 
@@ -223,6 +243,10 @@ class _BookingsBudgetScreenState extends ConsumerState<BookingsBudgetScreen> {
                     padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
                     sliver: SliverList.list(children: [
                       _BudgetCard(data: data, fmt: _fmt),
+                      if (data.plan == null && data.estimatesStatus == 'pending') ...[
+                        const SizedBox(height: 12),
+                        const _PlanPending(),
+                      ],
                       if (data.plan != null) ...[
                         const SizedBox(height: 12),
                         _PlanCard(
@@ -299,7 +323,8 @@ class _BookingsBudgetScreenState extends ConsumerState<BookingsBudgetScreen> {
             if (data.daily.isEmpty)
               const _EmptyTab(icon: 'assets/icons3d/calendar.png', text: 'Le programme jour par jour arrive dès que ton itinéraire est prêt.')
             else ...[
-              if (!data.estimatesAvailable) const _EstimatesNote(),
+              if (data.estimatesStatus != 'ready' || !data.estimatesAvailable)
+                _EstimatesNote(status: data.estimatesStatus, onRetry: () => _load(retry: true)),
               for (final d in data.daily) _DayCard(plan: d, fmt: _fmt),
             ],
             const _PriceDisclaimer(),
@@ -308,7 +333,8 @@ class _BookingsBudgetScreenState extends ConsumerState<BookingsBudgetScreen> {
       case 1:
         return [
           fade([
-            if (!data.estimatesAvailable) const _EstimatesNote(),
+            if (data.estimatesStatus != 'ready' || !data.estimatesAvailable)
+                _EstimatesNote(status: data.estimatesStatus, onRetry: () => _load(retry: true)),
             if (data.stays.isEmpty)
               const _EmptyTab(icon: 'assets/icons3d/hotel.png', text: 'Voyage d’une journée : pas de nuit à réserver.')
             else
@@ -1871,17 +1897,134 @@ class _InfoBanner extends StatelessWidget {
   }
 }
 
+/// État des estimations IA : en cours (animé) ou indisponibles (avec « Réessayer »)
 class _EstimatesNote extends StatelessWidget {
-  const _EstimatesNote();
+  final String status;
+  final VoidCallback onRetry;
+
+  const _EstimatesNote({required this.status, required this.onRetry});
 
   @override
   Widget build(BuildContext context) {
-    return const Padding(
-      padding: EdgeInsets.only(bottom: 12),
-      child: _InfoBanner(
-        icon: Icons.info_outline_rounded,
-        color: VoyagoColors.orange,
-        text: 'Estimations de prix indisponibles pour le moment : les liens restent filtrés selon ton budget.',
+    if (status == 'pending') {
+      return const Padding(
+        padding: EdgeInsets.only(bottom: 12),
+        child: _PendingShimmer(
+          child: Row(
+            children: [
+              SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: VoyagoColors.primary)),
+              SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  '✨ On estime les prix des hébergements et des visites… Ça s’affiche tout seul dans quelques secondes.',
+                  style: TextStyle(color: VoyagoColors.text, fontSize: 12.5, height: 1.35),
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: Container(
+        padding: const EdgeInsets.fromLTRB(12, 8, 6, 8),
+        decoration: BoxDecoration(
+          color: VoyagoColors.orange.withValues(alpha: 0.1),
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: VoyagoColors.orange.withValues(alpha: 0.35)),
+        ),
+        child: Row(
+          children: [
+            const Icon(Icons.info_outline_rounded, color: VoyagoColors.orange, size: 20),
+            const SizedBox(width: 10),
+            const Expanded(
+              child: Text(
+                'Estimations indisponibles pour le moment : les liens restent filtrés selon ton budget.',
+                style: TextStyle(color: VoyagoColors.text, fontSize: 12.5, height: 1.35),
+              ),
+            ),
+            TextButton(
+              onPressed: onRetry,
+              child: const Text('Réessayer', style: TextStyle(color: VoyagoColors.orange, fontWeight: FontWeight.w800)),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// Bandeau qui « respire » pendant un calcul en cours
+class _PendingShimmer extends StatefulWidget {
+  final Widget child;
+
+  const _PendingShimmer({required this.child});
+
+  @override
+  State<_PendingShimmer> createState() => _PendingShimmerState();
+}
+
+class _PendingShimmerState extends State<_PendingShimmer> with SingleTickerProviderStateMixin {
+  late final AnimationController _c = AnimationController(vsync: this, duration: const Duration(milliseconds: 1600))..repeat();
+
+  @override
+  void dispose() {
+    _c.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      animation: _c,
+      builder: (_, child) => Container(
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: VoyagoColors.primary.withValues(alpha: 0.35)),
+          gradient: LinearGradient(
+            begin: Alignment(-1.5 + 3 * _c.value, 0),
+            end: Alignment(-0.5 + 3 * _c.value, 0),
+            colors: [
+              VoyagoColors.primary.withValues(alpha: 0.06),
+              VoyagoColors.primary.withValues(alpha: 0.18),
+              VoyagoColors.primary.withValues(alpha: 0.06),
+            ],
+          ),
+        ),
+        child: child,
+      ),
+      child: widget.child,
+    );
+  }
+}
+
+/// Place du « meilleur plan » pendant que les estimations arrivent
+class _PlanPending extends StatelessWidget {
+  const _PlanPending();
+
+  @override
+  Widget build(BuildContext context) {
+    return const _PendingShimmer(
+      child: Row(
+        children: [
+          Text('🧭', style: TextStyle(fontSize: 24)),
+          SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('Ton meilleur plan se prépare…',
+                    style: TextStyle(color: VoyagoColors.text, fontSize: 15, fontWeight: FontWeight.w900)),
+                SizedBox(height: 2),
+                Text('Vols, hébergements et pass comparés selon ton budget',
+                    style: TextStyle(color: VoyagoColors.muted, fontSize: 12)),
+              ],
+            ),
+          ),
+          SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2, color: VoyagoColors.primary)),
+        ],
       ),
     );
   }

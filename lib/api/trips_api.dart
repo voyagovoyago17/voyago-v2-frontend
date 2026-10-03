@@ -75,8 +75,8 @@ class TripsApi {
 
   /// Valise du voyage (générée par l'IA au premier appel, quelques secondes)
   /// Réservations & Budget : propositions selon le budget et prestations réservées
-  Future<TripBookings> getBookings(String tripId) async {
-    final data = await _client.get(Endpoints.tripBookings(tripId));
+  Future<TripBookings> getBookings(String tripId, {bool retry = false}) async {
+    final data = await _client.get(Endpoints.tripBookings(tripId), queryParameters: retry ? {'retry': 1} : null);
     return TripBookings.fromJson(Map<String, dynamic>.from(data as Map));
   }
 
