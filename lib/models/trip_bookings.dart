@@ -117,6 +117,43 @@ class StayProposal {
   }
 }
 
+/// Vol réel (prix Aviasales via Travelpayouts), par personne aller-retour
+class FlightOffer {
+  final int price;
+  final String? airline;
+  final String? departureAt;
+  final String? returnAt;
+  final int transfers;
+  final int? returnTransfers;
+  final int? durationTo;
+  final int? saving;
+  final String link;
+
+  const FlightOffer({
+    required this.price,
+    this.airline,
+    this.departureAt,
+    this.returnAt,
+    this.transfers = 0,
+    this.returnTransfers,
+    this.durationTo,
+    this.saving,
+    required this.link,
+  });
+
+  factory FlightOffer.fromJson(Map<String, dynamic> j) => FlightOffer(
+        price: _int(j['price']),
+        airline: _str(j['airline']),
+        departureAt: _str(j['departure_at']),
+        returnAt: _str(j['return_at']),
+        transfers: _int(j['transfers']),
+        returnTransfers: _intOrNull(j['return_transfers']),
+        durationTo: _intOrNull(j['duration_to']),
+        saving: _intOrNull(j['saving']),
+        link: '${j['link'] ?? ''}',
+      );
+}
+
 class TransportOption {
   /// flight | intercity | pass | car | bike
   final String kind;
@@ -126,6 +163,9 @@ class TransportOption {
   final int? price;
   final String? priceLabel;
   final bool outsideBudget;
+  final bool livePrices;
+  final List<FlightOffer> offers;
+  final List<FlightOffer> cheaperDates;
 
   const TransportOption({
     required this.kind,
@@ -135,6 +175,9 @@ class TransportOption {
     this.price,
     this.priceLabel,
     this.outsideBudget = false,
+    this.livePrices = false,
+    this.offers = const [],
+    this.cheaperDates = const [],
   });
 
   factory TransportOption.fromJson(Map<String, dynamic> j) => TransportOption(
@@ -145,7 +188,63 @@ class TransportOption {
         price: _intOrNull(j['price']),
         priceLabel: _str(j['price_label']),
         outsideBudget: j['outside_budget'] == true,
+        livePrices: j['live_prices'] == true,
+        offers: _list(j['offers']).map(FlightOffer.fromJson).toList(),
+        cheaperDates: _list(j['cheaper_dates']).map(FlightOffer.fromJson).toList(),
       );
+}
+
+/// Une journée du voyage : nuit, visites et dépenses prévues
+class DayPlan {
+  final int day;
+  final String? date;
+  final String? area;
+  final bool sleeps;
+  final String? weatherIcon;
+  final int? tempMax;
+  final List<({String name, int price})> places;
+  final int lodging;
+  final int activities;
+  final int meals;
+  final int transport;
+  final int total;
+  final int budget;
+
+  const DayPlan({
+    required this.day,
+    this.date,
+    this.area,
+    required this.sleeps,
+    this.weatherIcon,
+    this.tempMax,
+    required this.places,
+    required this.lodging,
+    required this.activities,
+    required this.meals,
+    required this.transport,
+    required this.total,
+    required this.budget,
+  });
+
+  factory DayPlan.fromJson(Map<String, dynamic> j) {
+    final costs = _map(j['costs']) ?? const {};
+    final weather = _map(j['weather']);
+    return DayPlan(
+      day: _int(j['day']),
+      date: _str(j['date']),
+      area: _str(j['area']),
+      sleeps: j['sleeps'] == true,
+      weatherIcon: _str(weather?['icon']),
+      tempMax: _intOrNull(weather?['temp_max']),
+      places: _list(j['places']).map((p) => (name: '${p['name'] ?? ''}', price: _int(p['price']))).toList(),
+      lodging: _int(costs['lodging']),
+      activities: _int(costs['activities']),
+      meals: _int(costs['meals']),
+      transport: _int(costs['transport']),
+      total: _int(j['total']),
+      budget: _int(j['budget']),
+    );
+  }
 }
 
 class ActivityProposal {
@@ -216,6 +315,7 @@ class TripBookings {
   final int nights;
   final TripBudget budget;
   final List<StayProposal> stays;
+  final List<DayPlan> daily;
   final List<TransportOption> transport;
   final List<ActivityProposal> activities;
   final List<BookedItem> bookings;
@@ -235,6 +335,7 @@ class TripBookings {
     required this.nights,
     required this.budget,
     required this.stays,
+    this.daily = const [],
     required this.transport,
     required this.activities,
     required this.bookings,
@@ -259,6 +360,7 @@ class TripBookings {
       nights: _int(j['nights']),
       budget: TripBudget.fromJson(_map(j['budget']) ?? const {}),
       stays: _list(j['stays']).map(StayProposal.fromJson).toList(),
+      daily: _list(j['daily']).map(DayPlan.fromJson).toList(),
       transport: _list(j['transport']).map(TransportOption.fromJson).toList(),
       activities: _list(j['activities']).map(ActivityProposal.fromJson).toList(),
       bookings: _list(j['bookings']).map(BookedItem.fromJson).toList(),

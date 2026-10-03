@@ -52,6 +52,7 @@ class _BookingsBudgetScreenState extends ConsumerState<BookingsBudgetScreen> wit
 
   /// Lien partenaire ouvert : au retour dans l'app, on propose d'enregistrer la réservation
   _PendingBooking? _pending;
+  DateTime? _openedAt;
 
   @override
   void initState() {
@@ -69,8 +70,10 @@ class _BookingsBudgetScreenState extends ConsumerState<BookingsBudgetScreen> wit
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state != AppLifecycleState.resumed || _pending == null) return;
+    // Ignore le simple clignotement à l'ouverture du navigateur intégré
+    if (_openedAt != null && DateTime.now().difference(_openedAt!) < const Duration(seconds: 3)) return;
     final pending = _pending!;
-    _pending = null;
+    setState(() => _pending = null);
     Future<void>.delayed(const Duration(milliseconds: 350), () {
       if (mounted) _askBooked(pending);
     });
@@ -97,12 +100,19 @@ class _BookingsBudgetScreenState extends ConsumerState<BookingsBudgetScreen> wit
 
   Future<void> _open(String url, {_PendingBooking? track}) async {
     HapticFeedback.selectionClick();
-    final ok = await launchUrl(Uri.parse(url), mode: LaunchMode.externalApplication);
+    // Navigateur intégré : on réserve sans quitter Voyagooo
+    final uri = Uri.parse(url);
+    var ok = false;
+    try {
+      ok = await launchUrl(uri, mode: LaunchMode.inAppBrowserView);
+    } catch (_) {}
+    if (!ok) ok = await launchUrl(uri, mode: LaunchMode.externalApplication);
     if (!ok) {
       _snack("Impossible d'ouvrir le lien", error: true);
       return;
     }
-    _pending = track;
+    _openedAt = DateTime.now();
+    if (mounted && track != null) setState(() => _pending = track);
   }
 
   Future<void> _askBooked(_PendingBooking pending) async {
@@ -121,7 +131,7 @@ class _BookingsBudgetScreenState extends ConsumerState<BookingsBudgetScreen> wit
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
       builder: (_) => _AddBookingSheet(
-        initial: _PendingBooking(category: const ['lodging', 'transport', 'activities', 'other'][_tab], label: ''),
+        initial: _PendingBooking(category: const ['other', 'lodging', 'transport', 'activities', 'other'][_tab], label: ''),
         currency: _data?.currency ?? 'EUR',
       ),
     );
@@ -204,7 +214,7 @@ class _BookingsBudgetScreenState extends ConsumerState<BookingsBudgetScreen> wit
                       const SizedBox(height: 18),
                       _Tabs(
                         index: _tab,
-                        labels: ['Hébergements', 'Transports', 'Activités', 'Réservé (${data.bookings.length})'],
+                        labels: ['Jour par jour', 'Hébergements', 'Transports', 'Activités', 'Réservé (${data.bookings.length})'],
                         onChanged: (i) {
                           HapticFeedback.selectionClick();
                           setState(() => _tab = i);
@@ -220,7 +230,28 @@ class _BookingsBudgetScreenState extends ConsumerState<BookingsBudgetScreen> wit
                 ],
               ),
             ),
-      bottomNavigationBar: data == null ? null : _StickyFooter(data: data, fmt: _fmt, busy: _busy, onAdd: _addManually),
+      bottomNavigationBar: data == null
+          ? null
+          : Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                AnimatedSize(
+                  duration: const Duration(milliseconds: 220),
+                  child: _pending == null
+                      ? const SizedBox(width: double.infinity)
+                      : _PendingBanner(
+                          label: _pending!.label,
+                          onYes: () {
+                            final p = _pending!;
+                            setState(() => _pending = null);
+                            _askBooked(p);
+                          },
+                          onDismiss: () => setState(() => _pending = null),
+                        ),
+                ),
+                _StickyFooter(data: data, fmt: _fmt, busy: _busy, onAdd: _addManually),
+              ],
+            ),
     );
   }
 
@@ -232,6 +263,18 @@ class _BookingsBudgetScreenState extends ConsumerState<BookingsBudgetScreen> wit
 
     switch (_tab) {
       case 0:
+        return [
+          fade([
+            if (data.daily.isEmpty)
+              const _EmptyTab(icon: 'assets/icons3d/calendar.png', text: 'Le programme jour par jour arrive dès que ton itinéraire est prêt.')
+            else ...[
+              if (!data.estimatesAvailable) const _EstimatesNote(),
+              for (final d in data.daily) _DayCard(plan: d, fmt: _fmt),
+            ],
+            const _PriceDisclaimer(),
+          ]),
+        ];
+      case 1:
         return [
           fade([
             if (!data.estimatesAvailable) const _EstimatesNote(),
@@ -255,10 +298,19 @@ class _BookingsBudgetScreenState extends ConsumerState<BookingsBudgetScreen> wit
             const _PriceDisclaimer(),
           ]),
         ];
-      case 1:
+      case 2:
         return [
           fade([
             for (final t in data.transport)
+              if (t.kind == 'flight' && t.livePrices)
+                _FlightCard(
+                  option: t,
+                  fmt: _fmt,
+                  onOpen: (url, price) => _open(url,
+                      track: _PendingBooking(category: 'flights', label: 'Vols ${t.title}', amount: price, url: url)),
+                  onBooked: () => _askBooked(_PendingBooking(category: 'flights', label: 'Vols ${t.title}', amount: t.price)),
+                )
+              else
               _TransportCard(
                 option: t,
                 fmt: _fmt,
@@ -281,7 +333,7 @@ class _BookingsBudgetScreenState extends ConsumerState<BookingsBudgetScreen> wit
             const _PriceDisclaimer(),
           ]),
         ];
-      case 2:
+      case 3:
         return [
           fade([
             if (data.activities.isEmpty)
@@ -1631,6 +1683,407 @@ class _EmptyTab extends StatelessWidget {
           Image.asset(icon, width: 72, height: 72),
           const SizedBox(height: 12),
           Text(text, textAlign: TextAlign.center, style: const TextStyle(color: VoyagoColors.muted, fontSize: 13.5, height: 1.4)),
+        ],
+      ),
+    );
+  }
+}
+
+// =============================================================================
+// Jour par jour
+// =============================================================================
+
+class _DayCard extends StatelessWidget {
+  final DayPlan plan;
+  final String Function(num) fmt;
+
+  const _DayCard({required this.plan, required this.fmt});
+
+  @override
+  Widget build(BuildContext context) {
+    final date = plan.date == null ? null : DateTime.tryParse(plan.date!);
+    final over = plan.budget > 0 && plan.total > plan.budget;
+    final ratio = plan.budget <= 0 ? 0.0 : (plan.total / plan.budget).clamp(0.0, 1.0);
+    final color = over ? VoyagoColors.orange : VoyagoColors.primary;
+    final dateLabel = date == null ? null : DateFormat('EEEE d MMM', 'fr_FR').format(date);
+
+    return _Card(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                width: 44,
+                height: 44,
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  color: VoyagoColors.primary.withValues(alpha: 0.14),
+                  borderRadius: BorderRadius.circular(14),
+                ),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Text('JOUR', style: TextStyle(color: VoyagoColors.primary, fontSize: 8.5, fontWeight: FontWeight.w900)),
+                    Text('${plan.day}',
+                        style: const TextStyle(color: VoyagoColors.primary, fontSize: 18, fontWeight: FontWeight.w900, height: 1)),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      dateLabel == null ? 'Jour ${plan.day}' : '${dateLabel[0].toUpperCase()}${dateLabel.substring(1)}',
+                      style: const TextStyle(color: VoyagoColors.text, fontSize: 15, fontWeight: FontWeight.w800),
+                    ),
+                    Text(
+                      plan.sleeps ? 'Nuit · ${plan.area ?? 'sur place'}' : 'Jour du retour',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(color: VoyagoColors.muted, fontSize: 12),
+                    ),
+                  ],
+                ),
+              ),
+              if (plan.weatherIcon != null)
+                Text(
+                  '${plan.weatherIcon}${plan.tempMax != null ? ' ${plan.tempMax}°' : ''}',
+                  style: const TextStyle(color: VoyagoColors.text, fontSize: 14, fontWeight: FontWeight.w700),
+                ),
+            ],
+          ),
+          if (plan.places.isNotEmpty) ...[
+            const SizedBox(height: 10),
+            for (final p in plan.places)
+              Padding(
+                padding: const EdgeInsets.symmetric(vertical: 3),
+                child: Row(
+                  children: [
+                    const Icon(Icons.place_rounded, size: 14, color: VoyagoColors.muted),
+                    const SizedBox(width: 6),
+                    Expanded(
+                      child: Text(p.name,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(color: VoyagoColors.text, fontSize: 13)),
+                    ),
+                    Text(
+                      p.price > 0 ? fmt(p.price) : 'Gratuit',
+                      style: TextStyle(
+                        color: p.price > 0 ? VoyagoColors.yellow : VoyagoColors.primary,
+                        fontSize: 12.5,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+          ],
+          const SizedBox(height: 10),
+          Wrap(
+            spacing: 6,
+            runSpacing: 6,
+            children: [
+              if (plan.lodging > 0) _CostPill(cat: _lodging, value: fmt(plan.lodging)),
+              if (plan.activities > 0) _CostPill(cat: _activities, value: fmt(plan.activities)),
+              if (plan.meals > 0) _CostPill(cat: _meals, value: fmt(plan.meals)),
+              if (plan.transport > 0) _CostPill(cat: _transport, value: fmt(plan.transport)),
+            ],
+          ),
+          const SizedBox(height: 10),
+          Row(
+            children: [
+              Expanded(
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(4),
+                  child: LinearProgressIndicator(
+                    value: ratio,
+                    minHeight: 6,
+                    backgroundColor: VoyagoColors.cardBorder,
+                    color: color,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 10),
+              Text(
+                '~${fmt(plan.total)}',
+                style: TextStyle(color: color, fontSize: 14, fontWeight: FontWeight.w900),
+              ),
+              if (plan.budget > 0)
+                Text(' / ${fmt(plan.budget)}', style: const TextStyle(color: VoyagoColors.muted, fontSize: 12)),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _CostPill extends StatelessWidget {
+  final _Cat cat;
+  final String value;
+
+  const _CostPill({required this.cat, required this.value});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.fromLTRB(4, 3, 8, 3),
+      decoration: BoxDecoration(color: cat.color.withValues(alpha: 0.12), borderRadius: BorderRadius.circular(10)),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Image.asset(cat.icon, width: 16, height: 16),
+          const SizedBox(width: 4),
+          Text(value, style: TextStyle(color: cat.color, fontSize: 11.5, fontWeight: FontWeight.w800)),
+        ],
+      ),
+    );
+  }
+}
+
+// =============================================================================
+// Vols : vrais prix
+// =============================================================================
+
+class _FlightCard extends StatelessWidget {
+  final TransportOption option;
+  final String Function(num) fmt;
+  final void Function(String url, int? price) onOpen;
+  final VoidCallback onBooked;
+
+  const _FlightCard({required this.option, required this.fmt, required this.onOpen, required this.onBooked});
+
+  static String _day(String? iso) {
+    final d = iso == null ? null : DateTime.tryParse(iso.substring(0, iso.length >= 10 ? 10 : iso.length));
+    return d == null ? '' : DateFormat('d MMM', 'fr_FR').format(d);
+  }
+
+  /// Heure locale telle qu'annoncée par la compagnie (sans conversion de fuseau)
+  static String _time(String? iso) => iso != null && iso.length >= 16 ? iso.substring(11, 16).replaceFirst(':', 'h') : '';
+
+  static String _stops(int n) => n == 0 ? 'Direct' : '$n escale${n > 1 ? 's' : ''}';
+
+  @override
+  Widget build(BuildContext context) {
+    return _Card(
+      accent: _flights.color,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Image.asset('assets/icons3d/airplane.png', width: 40, height: 40),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(option.title,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(color: VoyagoColors.text, fontSize: 15, fontWeight: FontWeight.w800)),
+                    Text(option.subtitle, style: const TextStyle(color: VoyagoColors.muted, fontSize: 12)),
+                  ],
+                ),
+              ),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+                decoration: BoxDecoration(
+                  color: VoyagoColors.primary.withValues(alpha: 0.15),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: const Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(Icons.bolt_rounded, size: 12, color: VoyagoColors.primary),
+                    Text('Prix réels', style: TextStyle(color: VoyagoColors.primary, fontSize: 10.5, fontWeight: FontWeight.w800)),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          if (option.offers.isEmpty)
+            const Text(
+              'Pas encore de tarif relevé pour ces dates exactes : compare en direct ci-dessous.',
+              style: TextStyle(color: VoyagoColors.muted, fontSize: 12.5),
+            )
+          else
+            for (final o in option.offers)
+              Material(
+                color: VoyagoColors.background,
+                borderRadius: BorderRadius.circular(14),
+                child: InkWell(
+                  borderRadius: BorderRadius.circular(14),
+                  onTap: () => onOpen(o.link, option.price),
+                  child: Padding(
+                    padding: const EdgeInsets.all(10),
+                    child: Row(
+                      children: [
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(o.airline ?? 'Compagnie',
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: const TextStyle(color: VoyagoColors.text, fontSize: 13.5, fontWeight: FontWeight.w800)),
+                              const SizedBox(height: 2),
+                              Text(
+                                [
+                                  if (_time(o.departureAt).isNotEmpty) 'Départ ${_time(o.departureAt)}',
+                                  _stops(o.transfers),
+                                  if (o.returnTransfers != null && o.returnTransfers != o.transfers)
+                                    'retour ${_stops(o.returnTransfers!).toLowerCase()}',
+                                ].join(' · '),
+                                style: const TextStyle(color: VoyagoColors.muted, fontSize: 11.5),
+                              ),
+                            ],
+                          ),
+                        ),
+                        Column(
+                          crossAxisAlignment: CrossAxisAlignment.end,
+                          children: [
+                            Text(fmt(o.price),
+                                style: const TextStyle(color: VoyagoColors.text, fontSize: 16, fontWeight: FontWeight.w900)),
+                            const Text('/pers. A/R', style: TextStyle(color: VoyagoColors.muted, fontSize: 10.5)),
+                          ],
+                        ),
+                        const SizedBox(width: 6),
+                        const Icon(Icons.chevron_right_rounded, color: VoyagoColors.muted),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+          if (option.price != null && option.offers.isNotEmpty)
+            Padding(
+              padding: const EdgeInsets.only(top: 8),
+              child: Text(
+                'Pour tout le groupe : ~${fmt(option.price!)} · suivi à part du budget sur place',
+                style: const TextStyle(color: VoyagoColors.muted, fontSize: 11.5),
+              ),
+            ),
+          if (option.cheaperDates.isNotEmpty) ...[
+            const SizedBox(height: 12),
+            const Text('💡 Moins cher à d’autres dates',
+                style: TextStyle(color: VoyagoColors.text, fontSize: 13, fontWeight: FontWeight.w800)),
+            const SizedBox(height: 6),
+            SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: Row(
+                children: [
+                  for (final o in option.cheaperDates)
+                    Padding(
+                      padding: const EdgeInsets.only(right: 8),
+                      child: InkWell(
+                        borderRadius: BorderRadius.circular(12),
+                        onTap: () => onOpen(o.link, null),
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+                          decoration: BoxDecoration(
+                            color: VoyagoColors.primary.withValues(alpha: 0.1),
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(color: VoyagoColors.primary.withValues(alpha: 0.35)),
+                          ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text('${_day(o.departureAt)} → ${_day(o.returnAt)}',
+                                  style: const TextStyle(color: VoyagoColors.text, fontSize: 12, fontWeight: FontWeight.w700)),
+                              Text(
+                                o.saving != null && o.saving! > 0
+                                    ? '${fmt(o.price)} · −${fmt(o.saving!)}'
+                                    : fmt(o.price),
+                                style: const TextStyle(color: VoyagoColors.primary, fontSize: 12.5, fontWeight: FontWeight.w900),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                ],
+              ),
+            ),
+          ],
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              if (option.link != null)
+                Expanded(
+                  child: _PartnerButton(
+                    label: 'Comparer en direct',
+                    color: VoyagoColors.blue,
+                    onTap: () => onOpen(option.link!, option.price),
+                  ),
+                ),
+              if (option.link != null) const SizedBox(width: 8),
+              Expanded(
+                child: OutlinedButton.icon(
+                  onPressed: onBooked,
+                  icon: const Icon(Icons.check_circle_rounded, size: 16),
+                  label: const Text("C'est réservé"),
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: VoyagoColors.primary,
+                    side: const BorderSide(color: VoyagoColors.primary),
+                    padding: const EdgeInsets.symmetric(vertical: 11),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                    textStyle: const TextStyle(fontSize: 13, fontWeight: FontWeight.w800),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Après un lien partenaire : « Tu as réservé ? » reste à portée de pouce
+class _PendingBanner extends StatelessWidget {
+  final String label;
+  final VoidCallback onYes;
+  final VoidCallback onDismiss;
+
+  const _PendingBanner({required this.label, required this.onYes, required this.onDismiss});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      margin: const EdgeInsets.fromLTRB(12, 0, 12, 8),
+      padding: const EdgeInsets.fromLTRB(12, 8, 4, 8),
+      decoration: BoxDecoration(
+        color: VoyagoColors.surface,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: VoyagoColors.primary.withValues(alpha: 0.5)),
+        boxShadow: const [BoxShadow(color: Colors.black54, blurRadius: 12, offset: Offset(0, 4))],
+      ),
+      child: Row(
+        children: [
+          Image.asset('assets/icons3d/money_bag.png', width: 28, height: 28),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              'Tu as réservé « $label » ?',
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(color: VoyagoColors.text, fontSize: 12.5, fontWeight: FontWeight.w700),
+            ),
+          ),
+          TextButton(
+            onPressed: onYes,
+            child: const Text('Oui, ajouter', style: TextStyle(color: VoyagoColors.primary, fontWeight: FontWeight.w900)),
+          ),
+          IconButton(
+            visualDensity: VisualDensity.compact,
+            onPressed: onDismiss,
+            icon: const Icon(Icons.close_rounded, size: 18, color: VoyagoColors.muted),
+          ),
         ],
       ),
     );
