@@ -42,7 +42,7 @@
             android:resource="@color/voyagooo_notification" />
         <meta-data
             android:name="com.google.firebase.messaging.default_notification_channel_id"
-            android:value="voyagooo_alerts" />
+            android:value="voyagooo_signature" />
         <!-- Disable Impeller on Android to prevent Mali GPU video buffer deadlock -->
         <meta-data
             android:name="io.flutter.embedding.android.EnableImpeller"

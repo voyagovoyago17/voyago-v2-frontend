@@ -7,6 +7,7 @@ import 'package:sizer/sizer.dart';
 import '../models/auth_user.dart';
 import '../providers/auth_provider.dart';
 import '../providers/profile_provider.dart';
+import '../widgets/notification_bell.dart';
 import '../theme.dart';
 import 'package:flutter_earth_globe/flutter_earth_globe.dart';
 import 'package:flutter_earth_globe/flutter_earth_globe_controller.dart';
@@ -320,6 +321,17 @@ class _HeaderSection extends ConsumerWidget {
             ],
           ),
         ),
+
+        // Cloche temps réel : notifications du voyageur connecté
+        if (user != null)
+          Container(
+            decoration: BoxDecoration(
+              color: VoyagoColors.surface,
+              shape: BoxShape.circle,
+              border: Border.all(color: VoyagoColors.cardBorder),
+            ),
+            child: const NotificationBell(iconColor: VoyagoColors.text, size: 24),
+          ),
 
         // Bouton Connexion (connecté : l'avatar ouvre le menu)
         if (user == null)

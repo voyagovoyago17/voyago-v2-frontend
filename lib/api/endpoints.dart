@@ -108,6 +108,8 @@ class Endpoints {
   static const String notificationsArrival = '/api/notifications/arrival';
   static String notificationRead(String id) => '/api/notifications/$id/read';
   static const String notificationDevices = '/api/notifications/devices';
+  static const String notificationPrefs = '/api/notifications/preferences';
+  static const String notificationTest = '/api/notifications/test';
 
   // --- PLACES (AVIS & ÉTOILES) MODULE ---
   static const String placeReviews = '/api/places/reviews';

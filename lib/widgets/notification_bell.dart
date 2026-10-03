@@ -1,3 +1,4 @@
+import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -6,6 +7,7 @@ import '../providers/auth_provider.dart';
 import '../providers/notifications_provider.dart';
 import '../theme.dart';
 import 'notification_actions.dart';
+import '../services/live_notifications.dart';
 
 /// Cloche de notifications avec badge du nombre de non lues.
 class NotificationBell extends ConsumerWidget {
@@ -24,8 +26,8 @@ class NotificationBell extends ConsumerWidget {
       icon: Stack(
         clipBehavior: Clip.none,
         children: [
-          Icon(
-            unread > 0 ? Icons.notifications_active_rounded : Icons.notifications_none,
+          _RingingIcon(
+            icon: unread > 0 ? Icons.notifications_active_rounded : Icons.notifications_none,
             color: unread > 0 ? VoyagoColors.text : iconColor,
             size: size,
           ),
@@ -70,6 +72,52 @@ class NotificationBell extends ConsumerWidget {
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
       builder: (_) => _NotificationsSheet(hostContext: context),
+    );
+  }
+}
+
+/// La cloche sonne (petit balancement) à chaque notification reçue en direct.
+class _RingingIcon extends StatefulWidget {
+  final IconData icon;
+  final Color color;
+  final double size;
+  const _RingingIcon({required this.icon, required this.color, required this.size});
+
+  @override
+  State<_RingingIcon> createState() => _RingingIconState();
+}
+
+class _RingingIconState extends State<_RingingIcon> with SingleTickerProviderStateMixin {
+  late final AnimationController _ring = AnimationController(vsync: this, duration: const Duration(milliseconds: 900));
+
+  @override
+  void initState() {
+    super.initState();
+    InAppNotifications.instance.pulse.addListener(_onPulse);
+  }
+
+  void _onPulse() {
+    if (mounted) _ring.forward(from: 0);
+  }
+
+  @override
+  void dispose() {
+    InAppNotifications.instance.pulse.removeListener(_onPulse);
+    _ring.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      animation: _ring,
+      builder: (_, child) {
+        final t = _ring.value;
+        // Oscillation amortie autour du haut de la cloche
+        final angle = t == 0 ? 0.0 : math.sin(t * math.pi * 6) * 0.35 * (1 - t);
+        return Transform.rotate(angle: angle, alignment: Alignment.topCenter, child: child);
+      },
+      child: Icon(widget.icon, color: widget.color, size: widget.size),
     );
   }
 }

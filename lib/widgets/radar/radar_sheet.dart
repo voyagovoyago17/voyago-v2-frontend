@@ -7,6 +7,7 @@ import '../../models/trip_gem.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/profile_provider.dart';
 import '../../providers/trips_provider.dart';
+import '../../services/app_sounds.dart';
 import 'radar_visuals.dart';
 
 const _bg = Color(0xFF10221F);
@@ -426,6 +427,7 @@ class _Message extends StatelessWidget {
 
 /// Célébration d'une pépite ramassée : confettis et XP gagnée.
 Future<void> showGemCollected(BuildContext context, TripGem gem, int xp, {int shards = 0, bool perfectDay = false}) {
+  if (xp > 0) AppSounds.instance.gem();
   return showGeneralDialog(
     context: context,
     barrierDismissible: true,

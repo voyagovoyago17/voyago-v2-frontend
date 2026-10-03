@@ -1,0 +1,4 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Le son signature est référencé par son nom (canal de notification, push FCM) : on le garde au build -->
+<resources xmlns:tools="http://schemas.android.com/tools"
+    tools:keep="@raw/voyagooo" />

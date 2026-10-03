@@ -11,8 +11,8 @@ import '../models/app_notification.dart';
 import '../providers/auth_provider.dart';
 import '../providers/notifications_provider.dart';
 import '../router.dart';
-import '../theme.dart';
 import '../widgets/notification_actions.dart';
+import 'live_notifications.dart';
 
 /// Notifications push (Firebase Cloud Messaging).
 ///
@@ -150,10 +150,9 @@ final pushNotificationsProvider = Provider<void>((ref) {
   // App au premier plan : la cloche se met à jour et un bandeau s'affiche
   subscriptions.add(FirebaseMessaging.onMessage.listen((message) {
     if (!ref.read(isAuthenticatedProvider)) return;
-    ref.read(notificationsProvider.notifier).refresh();
     final n = PushNotifications.toAppNotification(message);
-    if (n.title.isEmpty) return;
-    _showForegroundBanner(n, onOpen: canOpenNotification(n) ? () => open(n) : null);
+    // Bandeau en haut + son signature (une seule fois si le flux temps réel l'a déjà montrée)
+    InAppNotifications.instance.present(ref, n, sound: message.data['sound'] != '0');
   }));
 
   // Push touché alors que l'app tournait en arrière-plan
@@ -173,68 +172,3 @@ final pushNotificationsProvider = Provider<void>((ref) {
     }
   });
 });
-
-void _showForegroundBanner(AppNotification n, {VoidCallback? onOpen}) {
-  final messenger = PushNotifications.messengerKey.currentState;
-  if (messenger == null) return;
-  final (icon, color) = switch (n.type) {
-    'trip_ready' => (Icons.flight_takeoff_rounded, VoyagoColors.blue),
-    'comment' => (Icons.mode_comment_rounded, VoyagoColors.primary),
-    'trip_remixed' => (Icons.explore_rounded, VoyagoColors.yellow),
-    'tribe_trip' => (Icons.groups_rounded, VoyagoColors.primary),
-    'circle_request' => (Icons.lock_person_rounded, VoyagoColors.yellow),
-    'price_drop' => (Icons.trending_down_rounded, VoyagoColors.primary),
-    'plan_b' => (Icons.umbrella_rounded, VoyagoColors.blue),
-    'review_thanks' => (Icons.star_rounded, VoyagoColors.yellow),
-    _ => (Icons.notifications_active_rounded, VoyagoColors.orange),
-  };
-
-  messenger
-    ..hideCurrentSnackBar()
-    ..showSnackBar(
-      SnackBar(
-        behavior: SnackBarBehavior.floating,
-        backgroundColor: VoyagoColors.surface,
-        elevation: 6,
-        duration: const Duration(seconds: 5),
-        margin: const EdgeInsets.fromLTRB(12, 0, 12, 12),
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(16),
-          side: BorderSide(color: color.withValues(alpha: 0.4)),
-        ),
-        content: Row(
-          children: [
-            Container(
-              width: 34,
-              height: 34,
-              decoration: BoxDecoration(color: color.withValues(alpha: 0.15), shape: BoxShape.circle),
-              child: Icon(icon, color: color, size: 18),
-            ),
-            const SizedBox(width: 10),
-            Expanded(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    n.title,
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(color: VoyagoColors.text, fontSize: 13.5, fontWeight: FontWeight.w800),
-                  ),
-                  if (n.body.isNotEmpty)
-                    Text(
-                      n.body,
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(color: VoyagoColors.muted, fontSize: 12),
-                    ),
-                ],
-              ),
-            ),
-          ],
-        ),
-        action: onOpen == null ? null : SnackBarAction(label: 'Voir', textColor: color, onPressed: onOpen),
-      ),
-    );
-}

@@ -5,6 +5,7 @@ import 'package:sizer/sizer.dart';
 import 'core/config/app_environment.dart';
 import 'services/app_rating_service.dart';
 import 'services/push_notifications.dart';
+import 'services/live_notifications.dart';
 import 'services/storage_service.dart';
 import 'router.dart';
 import 'theme.dart';
@@ -30,6 +31,7 @@ class VoyagoApp extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final router = ref.watch(routerProvider);
     ref.watch(pushNotificationsProvider);
+    ref.watch(liveNotificationsProvider);
 
     return Sizer(
       builder: (context, orientation, deviceType) {

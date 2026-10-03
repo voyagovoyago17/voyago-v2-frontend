@@ -17,6 +17,7 @@ import '../services/storage_service.dart';
 import '../theme.dart';
 import '../widgets/trip_card.dart';
 import '../widgets/shard_wallet_card.dart';
+import '../widgets/notification_prefs_card.dart';
 import '../widgets/trip_visibility_sheet.dart';
 import '../widgets/email_verification_sheet.dart';
 
@@ -798,6 +799,11 @@ class _ProfileContentState extends ConsumerState<_ProfileContent> {
 
             // Section Mes Voyages
             _buildTripsSection(tripsAsync),
+
+            const SizedBox(height: 32),
+
+            // Réglages des notifications (son, social, heures calmes)
+            const NotificationPrefsCard(),
 
             const SizedBox(height: 32),
 
