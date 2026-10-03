@@ -75,6 +75,7 @@ class TripGeneratorNotifier extends StateNotifier<TripGeneratorState> {
     String? country,
     String? countryCode,
     String? userId,
+    Map<String, dynamic> extra = const {},
   }) async {
     state = const TripGeneratorState(
       isGenerating: true,
@@ -94,6 +95,7 @@ class TripGeneratorNotifier extends StateNotifier<TripGeneratorState> {
         city: city,
         country: country,
         countryCode: countryCode,
+        extra: extra,
       );
 
       state = TripGeneratorState(

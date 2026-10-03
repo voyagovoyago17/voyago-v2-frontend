@@ -23,8 +23,11 @@ class TripsApi {
     String? country,
     String? countryCode,
     String? tenantId,
+    Map<String, dynamic> extra = const {},
   }) async {
     final payload = {
+      // Groupe et budget chiffré (facultatifs)
+      ...extra,
       'destination': destination.trim(),
       'duration_days': durationDays,
       'pace': pace,

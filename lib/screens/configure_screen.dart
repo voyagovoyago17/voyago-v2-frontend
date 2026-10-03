@@ -13,6 +13,7 @@ import '../theme.dart';
 import '../widgets/auth_bottom_sheet.dart';
 import '../widgets/travel_calendar_picker.dart';
 import '../widgets/weather_flight_scene.dart';
+import '../widgets/configure/travel_party_section.dart';
 
 class ConfigureScreen extends ConsumerStatefulWidget {
   final List<String> selectedInterests;
@@ -52,6 +53,9 @@ class _ConfigureScreenState extends ConsumerState<ConfigureScreen> {
   // Transports & Budget
   final Set<String> _transports = {'marche'};
   String _budget = 'moyen';
+
+  // Qui part et budget chiffré (facultatifs)
+  TravelPartyValue _party = const TravelPartyValue();
 
   // State
   bool _isGenerating = false;
@@ -210,6 +214,7 @@ class _ConfigureScreenState extends ConsumerState<ConfigureScreen> {
             country: _selectedCountry,
             countryCode: _selectedCountryCode,
             userId: userId,
+            extra: _party.toPayload(),
           );
 
       if (mounted) {
@@ -747,6 +752,13 @@ class _ConfigureScreenState extends ConsumerState<ConfigureScreen> {
               ),
             );
           }).toList(),
+        ),
+        const SizedBox(height: 28),
+
+        // Qui part ? + budget chiffré : itinéraire, activités et valise sur mesure
+        TravelPartySection(
+          value: _party,
+          onChanged: (v) => setState(() => _party = v),
         ),
       ],
     );
