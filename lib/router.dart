@@ -21,6 +21,7 @@ import 'screens/welcome_screen.dart';
 import 'screens/journal_screen.dart';
 import 'screens/journal_detail_screen.dart';
 import 'screens/tribe_settings_screen.dart';
+import 'screens/bookings_budget_screen.dart';
 
 class RouterNotifier extends ChangeNotifier {
   final Ref _ref;
@@ -130,6 +131,11 @@ final routerProvider = Provider<GoRouter>((ref) {
           final trip = state.extra is Trip ? state.extra as Trip : null;
           return ItineraryScreen(tripId: tripId, trip: trip);
         },
+      ),
+      // Réservations & Budget d'un voyage
+      GoRoute(
+        path: '/trip/:tripId/bookings',
+        builder: (context, state) => BookingsBudgetScreen(tripId: state.pathParameters['tripId'] ?? ''),
       ),
       GoRoute(
         path: '/pricing',

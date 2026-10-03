@@ -1,5 +1,6 @@
 import '../models/trip.dart';
 import '../models/packing.dart';
+import '../models/trip_bookings.dart';
 import '../models/trip_gem.dart';
 import 'dio_client.dart';
 import 'endpoints.dart';
@@ -73,6 +74,33 @@ class TripsApi {
   }
 
   /// Valise du voyage (générée par l'IA au premier appel, quelques secondes)
+  /// Réservations & Budget : propositions selon le budget et prestations réservées
+  Future<TripBookings> getBookings(String tripId) async {
+    final data = await _client.get(Endpoints.tripBookings(tripId));
+    return TripBookings.fromJson(Map<String, dynamic>.from(data as Map));
+  }
+
+  Future<TripBookings> addBooking(
+    String tripId, {
+    required String category,
+    required String label,
+    required int amount,
+    String? url,
+  }) async {
+    final data = await _client.post(Endpoints.tripBookings(tripId), data: {
+      'category': category,
+      'label': label,
+      'amount': amount,
+      if (url != null) 'url': url,
+    });
+    return TripBookings.fromJson(Map<String, dynamic>.from(data as Map));
+  }
+
+  Future<TripBookings> removeBooking(String tripId, String itemId) async {
+    final data = await _client.delete('${Endpoints.tripBookings(tripId)}/$itemId');
+    return TripBookings.fromJson(Map<String, dynamic>.from(data as Map));
+  }
+
   Future<PackingList> getPacking(String tripId) async {
     final data = await _client.get(Endpoints.tripPacking(tripId));
     return PackingList.fromJson(data as Map<String, dynamic>);

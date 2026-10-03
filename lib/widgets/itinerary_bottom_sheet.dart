@@ -51,6 +51,9 @@ class ItineraryBottomSheet extends ConsumerWidget {
   /// Ouvrir la valise du voyage (auteur, voyage pas encore terminé)
   final VoidCallback? onOpenPacking;
 
+  /// Réservations & Budget (auteur du voyage)
+  final VoidCallback? onOpenBookings;
+
   const ItineraryBottomSheet({
     super.key,
     required this.pois,
@@ -68,6 +71,7 @@ class ItineraryBottomSheet extends ConsumerWidget {
     this.startDate,
     this.onEditDates,
     this.onOpenPacking,
+    this.onOpenBookings,
   });
 
   DateTime? get _start {
@@ -372,7 +376,7 @@ class ItineraryBottomSheet extends ConsumerWidget {
                               fontSize: 12,
                             ),
                           ),
-                          if (_tripRange != null || onEditDates != null || onOpenPacking != null) ...[
+                          if (_tripRange != null || onEditDates != null || onOpenPacking != null || onOpenBookings != null) ...[
                             const SizedBox(height: 6),
                             Wrap(
                               spacing: 6,
@@ -381,6 +385,7 @@ class ItineraryBottomSheet extends ConsumerWidget {
                                 if (_tripRange != null || onEditDates != null)
                                   _TripDatesChip(range: _tripRange, onTap: onEditDates),
                                 if (onOpenPacking != null) _PackingChip(onTap: onOpenPacking!),
+                                if (onOpenBookings != null) _BookingsChip(onTap: onOpenBookings!),
                               ],
                             ),
                           ],
@@ -1309,6 +1314,39 @@ class _PackingChip extends StatelessWidget {
             const SizedBox(width: 4),
             const Text('Ma valise',
                 style: TextStyle(color: VoyagoColors.yellow, fontSize: 11.5, fontWeight: FontWeight.w800)),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+
+/// « 💰 Réservations & Budget » : où dormir, comment bouger et quoi réserver selon le budget.
+class _BookingsChip extends StatelessWidget {
+  final VoidCallback onTap;
+
+  const _BookingsChip({required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      borderRadius: BorderRadius.circular(10),
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.fromLTRB(5, 2, 9, 2),
+        decoration: BoxDecoration(
+          color: VoyagoColors.primary.withValues(alpha: 0.12),
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(color: VoyagoColors.primary.withValues(alpha: 0.4)),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Image.asset('assets/icons3d/money_bag.png', width: 20, height: 20),
+            const SizedBox(width: 4),
+            const Text('Réservations & Budget',
+                style: TextStyle(color: VoyagoColors.primary, fontSize: 11.5, fontWeight: FontWeight.w800)),
           ],
         ),
       ),

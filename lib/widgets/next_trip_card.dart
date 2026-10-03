@@ -208,7 +208,9 @@ class _Card extends ConsumerWidget {
                     ),
                   ],
                   const SizedBox(height: 12),
-                  Row(
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
                     children: [
                       if (mode == _Mode.upcoming)
                         _Action(
@@ -224,11 +226,15 @@ class _Card extends ConsumerWidget {
                           filled: true,
                           onTap: () => _addDates(context, ref),
                         ),
-                      const SizedBox(width: 8),
                       _Action(
                         label: mode == _Mode.ongoing ? 'Programme du jour' : 'Itinéraire',
                         icon: Icons.map_rounded,
                         onTap: () => context.go('/itinerary/${trip.id}'),
+                      ),
+                      _Action(
+                        label: 'Budget',
+                        asset: 'assets/icons3d/money_bag.png',
+                        onTap: () => context.push('/trip/${trip.id}/bookings'),
                       ),
                     ],
                   ),

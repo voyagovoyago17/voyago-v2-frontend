@@ -25,6 +25,11 @@ class TravelerDrawer extends ConsumerWidget {
     final profileAsync = user != null ? ref.watch(profileProvider(user.userId)) : null;
     final tripsAsync = user != null ? ref.watch(tripsProvider(user.userId)) : null;
     final pastTripsCount = tripsAsync?.valueOrNull?.where((t) => t.isPast).length ?? 0;
+    // Réservations & Budget : voyage ouvert sur la carte, sinon le prochain voyage actif
+    final budgetTrips = activeTrips(tripsAsync?.valueOrNull ?? const []);
+    final budgetTripId = budgetTrips.any((t) => t.id == currentTripId)
+        ? currentTripId
+        : (budgetTrips.isEmpty ? null : budgetTrips.first.id);
 
     return Drawer(
       backgroundColor: VoyagoColors.surface,
@@ -196,6 +201,15 @@ class TravelerDrawer extends ConsumerWidget {
                       if (currentTripId == null) context.go('/itinerary');
                     },
                   ),
+                  if (budgetTripId != null)
+                    _NavTile(
+                      icon: Icons.account_balance_wallet_outlined,
+                      label: 'Réservations & Budget',
+                      onTap: () {
+                        Navigator.of(context).pop();
+                        context.push('/trip/$budgetTripId/bookings');
+                      },
+                    ),
                   _NavTile(
                     icon: Icons.auto_stories_outlined,
                     label: 'Journal de voyage',

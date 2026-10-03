@@ -1713,6 +1713,11 @@ class _ItineraryScreenState extends ConsumerState<ItineraryScreen>
                     trip.userId == ref.watch(currentUserProvider)?.userId
                 ? () => showPackingSheet(context, tripId: trip.id, destination: trip.city ?? trip.destination)
                 : null,
+            onOpenBookings: !trip.id.startsWith('demo') &&
+                    !trip.isPast &&
+                    trip.userId == ref.watch(currentUserProvider)?.userId
+                ? () => context.push('/trip/${trip.id}/bookings')
+                : null,
             onNavigateToPoi: _navigateToPoi,
             onDayChanged: (day) {
               setState(() {
